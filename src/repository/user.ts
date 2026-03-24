@@ -616,3 +616,14 @@ export async function getAllUserProviderGroups(): Promise<string[]> {
 
   return Array.from(allGroups).sort();
 }
+
+// CUSTOM: 发货系统专用 - 按 name 查询用户
+export async function findUserByName(name: string): Promise<User | null> {
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.name, name), isNull(users.deletedAt)))
+    .limit(1);
+
+  return user ? toUser(user) : null;
+}

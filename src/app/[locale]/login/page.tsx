@@ -31,7 +31,8 @@ interface LoginVersionInfo {
   hasUpdate: boolean;
 }
 
-const DEFAULT_SITE_TITLE = "Claude Code Hub";
+// CUSTOM: 自定义系统名称
+const DEFAULT_SITE_TITLE = "API 管理控制台";
 
 function parseLoginType(value: unknown): LoginType | null {
   if (value === "admin" || value === "dashboard_user" || value === "readonly_user") {
@@ -226,16 +227,7 @@ function LoginPageContent() {
 
       {/* Top Right Controls */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        <Link
-          href="/usage-doc"
-          className="flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3 text-sm text-muted-foreground shadow-xs transition-all hover:border-border hover:bg-accent/60 hover:text-accent-foreground"
-        >
-          <Book className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t("actions.viewUsageDoc")}</span>
-          <span className="sm:hidden">
-            <ExternalLink className="h-3.5 w-3.5" />
-          </span>
-        </Link>
+        {/* CUSTOM: 隐藏查看使用文档按钮 */}
         <ThemeSwitcher size="sm" />
         <LanguageSwitcher size="sm" />
       </div>
@@ -407,25 +399,8 @@ function LoginPageContent() {
       </div>
 
       {/* Page Footer */}
+      {/* CUSTOM: 隐藏底部版本号和系统名称 */}
       <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-1">
-        <p
-          data-testid="login-site-title-footer"
-          className="text-center text-xs text-muted-foreground"
-        >
-          {siteTitle}
-        </p>
-
-        {versionInfo?.current ? (
-          <div
-            data-testid="login-footer-version"
-            className="flex items-center justify-center gap-2 text-xs text-muted-foreground"
-          >
-            <span className="font-mono">{formatVersionLabel(versionInfo.current)}</span>
-            {versionInfo.hasUpdate ? (
-              <span className="text-orange-600">{tCustoms("version.updateAvailable")}</span>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );

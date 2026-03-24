@@ -1,0 +1,2 @@
+# CUSTOM: 保护自定义文件，合并时使用本地版本
+src/app/favicon.ico merge=ours
