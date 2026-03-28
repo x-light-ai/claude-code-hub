@@ -35,6 +35,45 @@ import { type BatchUpdateResult, syncUserProviderGroupFromKeys } from "./users";
 
 type TranslationFunction = (key: string, values?: Record<string, string>) => string;
 
+function addDays(base: Date, days: number): Date {
+  return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function resolveEditedKeyExpiry(options: {
+  currentKey: Key;
+  hasExpiresAtField: boolean;
+  parsedExpiresAt?: Date | null;
+  hasDurationDaysField: boolean;
+  durationDays?: number | null;
+}): { expiresAt?: Date | null; durationDays?: number | null } {
+  const { currentKey, hasExpiresAtField, parsedExpiresAt, hasDurationDaysField, durationDays } = options;
+
+  if (hasExpiresAtField) {
+    return {
+      expiresAt: parsedExpiresAt ?? null,
+      durationDays: null,
+    };
+  }
+
+  if (!hasDurationDaysField) {
+    return {};
+  }
+
+  if (durationDays == null) {
+    return {
+      durationDays: null,
+    };
+  }
+
+  const currentExpiresAt = currentKey.expiresAt ?? null;
+  const isCurrentlyActive = currentExpiresAt instanceof Date && currentExpiresAt.getTime() > Date.now();
+
+  return {
+    expiresAt: isCurrentlyActive ? addDays(currentExpiresAt, durationDays) : null,
+    durationDays,
+  };
+}
+
 function validateNonAdminProviderGroup(
   userProviderGroup: string,
   requestedProviderGroup: string,
@@ -91,6 +130,7 @@ export async function addKey(data: {
   userId: number;
   name: string;
   expiresAt?: string;
+  durationDays?: number | null;
   isEnabled?: boolean;
   canLoginWebUi?: boolean;
   limit5hUsd?: number | null;
@@ -165,6 +205,7 @@ export async function addKey(data: {
     const validatedData = KeyFormSchema.parse({
       name: data.name,
       expiresAt: data.expiresAt,
+      durationDays: data.durationDays,
       canLoginWebUi: data.canLoginWebUi,
       limit5hUsd: data.limit5hUsd,
       limitDailyUsd: data.limitDailyUsd,
@@ -299,6 +340,7 @@ export async function addKey(data: {
       key: generatedKey,
       is_enabled: data.isEnabled ?? true,
       expires_at: expiresAt,
+      duration_days: validatedData.durationDays ?? null,
       can_login_web_ui: validatedData.canLoginWebUi,
       limit_5h_usd: validatedData.limit5hUsd,
       limit_daily_usd: validatedData.limitDailyUsd,
@@ -334,6 +376,7 @@ export async function editKey(
   data: {
     name: string;
     expiresAt?: string;
+    durationDays?: number | null;
     canLoginWebUi?: boolean;
     isEnabled?: boolean;
     limit5hUsd?: number | null;
@@ -397,6 +440,7 @@ export async function editKey(
     // 仅当调用方显式携带 expiresAt 字段时才更新/清除该字段：
     // - 避免像“仅修改限额”这类局部更新把 expiresAt 意外清空
     const hasExpiresAtField = Object.hasOwn(data, "expiresAt");
+    const hasDurationDaysField = Object.hasOwn(data, "durationDays");
 
     const validatedData = KeyFormSchema.parse(data);
 
@@ -510,14 +554,14 @@ export async function editKey(
     // - 未携带 expiresAt：不更新该字段
     // - 携带 expiresAt 但为空：清除（永不过期）
     // - 携带 expiresAt 且为字符串：设置为对应 Date
-    let expiresAt: Date | null | undefined;
+    let parsedExpiresAt: Date | null | undefined;
     if (hasExpiresAtField) {
       if (validatedData.expiresAt === undefined) {
-        expiresAt = null;
+        parsedExpiresAt = null;
       } else {
         try {
           const timezone = await resolveSystemTimezone();
-          expiresAt = parseDateInputAsTimezone(validatedData.expiresAt, timezone);
+          parsedExpiresAt = parseDateInputAsTimezone(validatedData.expiresAt, timezone);
         } catch {
           return {
             ok: false,
@@ -528,6 +572,14 @@ export async function editKey(
       }
     }
 
+    const expiryUpdate = resolveEditedKeyExpiry({
+      currentKey: key,
+      hasExpiresAtField,
+      parsedExpiresAt,
+      hasDurationDaysField,
+      durationDays: validatedData.durationDays,
+    });
+
     const isAdmin = session.user.role === "admin";
     const prevProviderGroup = normalizeProviderGroup(key.providerGroup);
     const nextProviderGroup = isAdmin ? normalizeProviderGroup(validatedData.providerGroup) : null;
@@ -535,7 +587,10 @@ export async function editKey(
 
     await updateKey(keyId, {
       name: validatedData.name,
-      ...(hasExpiresAtField ? { expires_at: expiresAt } : {}),
+      ...(Object.hasOwn(expiryUpdate, "expiresAt") ? { expires_at: expiryUpdate.expiresAt ?? null } : {}),
+      ...(Object.hasOwn(expiryUpdate, "durationDays")
+        ? { duration_days: expiryUpdate.durationDays ?? null }
+        : {}),
       can_login_web_ui: validatedData.canLoginWebUi,
       ...(data.isEnabled !== undefined ? { is_enabled: data.isEnabled } : {}),
       limit_5h_usd: validatedData.limit5hUsd,
@@ -1206,6 +1261,7 @@ export async function renewKeyExpiresAt(
 
     await updateKey(keyId, {
       expires_at: expiresAt,
+      duration_days: null,
       ...(data.enableKey === true ? { is_enabled: true } : {}),
     });
 

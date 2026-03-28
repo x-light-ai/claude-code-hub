@@ -258,6 +258,11 @@
         "placeholder": "有効期限を選択",
         "description": "空欄の場合は無期限"
       },
+      "durationDays": {
+        "label": "相対有効日数",
+        "placeholder": "未設定で無効",
+        "description": "最初の実際の API リクエスト時点からカウントを開始します。固定有効期限とは同時に設定できません。キーがまだ有効な場合、更新後は現在の有効期限から延長されます。"
+      },
       "canLoginWebUi": {
         "label": "専用の残高確認ページを有効化",
         "description": "専用ページから残高を確認できるようにします"

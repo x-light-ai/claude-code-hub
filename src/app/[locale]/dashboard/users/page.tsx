@@ -1,5 +1,6 @@
 import { redirect } from "@/i18n/routing";
 import { getSession } from "@/lib/auth";
+import { getSystemSettings } from "@/repository/system-config";
 import { UsersPageClient } from "./users-page-client";
 
 export default async function UsersPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -11,6 +12,10 @@ export default async function UsersPage({ params }: { params: Promise<{ locale: 
     return redirect({ href: "/login", locale });
   }
 
+  const systemSettings = await getSystemSettings();
+
   // TypeScript: session is guaranteed to be non-null after the redirect check
-  return <UsersPageClient currentUser={session.user} />;
+  return (
+    <UsersPageClient currentUser={session.user} currencyCode={systemSettings.currencyDisplay} />
+  );
 }

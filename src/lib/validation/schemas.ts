@@ -349,13 +349,20 @@ export const UpdateUserSchema = z.object({
 /**
  * 密钥表单数据验证schema
  */
-export const KeyFormSchema = z.object({
+export const KeyFormSchemaBase = z.object({
   name: z.string().min(1, "密钥名称不能为空").max(64, "密钥名称不能超过64个字符"),
   expiresAt: z
     .string()
     .optional()
     .default("")
     .transform((val) => (val === "" ? undefined : val)),
+  durationDays: z.coerce
+    .number()
+    .int("相对有效期必须是整数天")
+    .min(1, "相对有效期至少为1天")
+    .max(3650, "相对有效期不能超过3650天")
+    .nullable()
+    .optional(),
   // Web UI 登录权限控制
   canLoginWebUi: z.boolean().optional().default(true),
   // 金额限流配置
@@ -409,6 +416,16 @@ export const KeyFormSchema = z.object({
     .optional()
     .default(""),
   cacheTtlPreference: CACHE_TTL_PREFERENCE.optional().default("inherit"),
+});
+
+export const KeyFormSchema = KeyFormSchemaBase.superRefine((data, ctx) => {
+  if (data.expiresAt !== undefined && data.durationDays != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定过期时间与相对有效期不能同时设置",
+      path: ["durationDays"],
+    });
+  }
 });
 
 /**

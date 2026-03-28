@@ -1,55 +1,32 @@
-"use client";
-
-import { useCallback, useEffect, useState } from "react";
-import { getMyQuota, type MyUsageQuota } from "@/actions/my-usage";
+import dynamic from "next/dynamic";
+import { getMyQuota } from "@/actions/my-usage";
 import { getServerTimeZone } from "@/actions/system-config";
-import { useRouter } from "@/i18n/routing";
 import { CollapsibleQuotaCard } from "./_components/collapsible-quota-card";
 import { ExpirationInfo } from "./_components/expiration-info";
 import { MyUsageHeader } from "./_components/my-usage-header";
 import { ProviderGroupInfo } from "./_components/provider-group-info";
-import { StatisticsSummaryCard } from "./_components/statistics-summary-card";
 import { UsageLogsSection } from "./_components/usage-logs-section";
 
-export default function MyUsagePage() {
-  const router = useRouter();
+const StatisticsSummaryCard = dynamic(
+  () => import("./_components/statistics-summary-card").then((mod) => mod.StatisticsSummaryCard),
+  {
+    ssr: false,
+    loading: () => <div className="min-h-[320px] rounded-lg border bg-card" />,
+  }
+);
 
-  const [quota, setQuota] = useState<MyUsageQuota | null>(null);
-  const [isQuotaLoading, setIsQuotaLoading] = useState(true);
-  const [serverTimeZone, setServerTimeZone] = useState<string | undefined>(undefined);
+export default async function MyUsagePage() {
+  const [quotaResult, timeZoneResult] = await Promise.all([getMyQuota(), getServerTimeZone()]);
 
-  const loadInitial = useCallback(() => {
-    setIsQuotaLoading(true);
-
-    void getMyQuota()
-      .then((quotaResult) => {
-        if (quotaResult.ok) setQuota(quotaResult.data);
-      })
-      .finally(() => setIsQuotaLoading(false));
-
-    void getServerTimeZone().then((tzResult) => {
-      if (tzResult.ok) setServerTimeZone(tzResult.data.timeZone);
-    });
-  }, []);
-
-  useEffect(() => {
-    loadInitial();
-  }, [loadInitial]);
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
-  };
-
+  const quota = quotaResult.ok ? quotaResult.data : null;
+  const serverTimeZone = timeZoneResult.ok ? timeZoneResult.data.timeZone : undefined;
   const keyExpiresAt = quota?.expiresAt ?? null;
   const userExpiresAt = quota?.userExpiresAt ?? null;
 
   return (
     <div className="space-y-6">
-      <MyUsageHeader onLogout={handleLogout} keyName={quota?.keyName} userName={quota?.userName} />
+      <MyUsageHeader keyName={quota?.keyName} userName={quota?.userName} />
 
-      {/* Provider Group and Expiration info */}
       {quota ? (
         <div className="space-y-3">
           <ProviderGroupInfo
@@ -67,7 +44,7 @@ export default function MyUsagePage() {
         </div>
       ) : null}
 
-      <CollapsibleQuotaCard quota={quota} loading={isQuotaLoading} />
+      <CollapsibleQuotaCard quota={quota} loading={false} />
 
       <StatisticsSummaryCard serverTimeZone={serverTimeZone} />
 

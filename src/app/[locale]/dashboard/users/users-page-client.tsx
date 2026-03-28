@@ -42,15 +42,15 @@ function splitTags(value?: string | null): string[] {
 }
 
 interface UsersPageClientProps {
-  initialUsers?: UserDisplay[];
   currentUser: User;
+  currencyCode: CurrencyCode;
 }
 
 export function UsersPageClient(props: UsersPageClientProps) {
   return <UsersPageContent {...props} />;
 }
 
-function UsersPageContent({ currentUser }: UsersPageClientProps) {
+function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
   const t = useTranslations("dashboard.users");
   const tUserMgmt = useTranslations("dashboard.userManagement");
   const tKeyList = useTranslations("dashboard.keyList");
@@ -183,17 +183,6 @@ function UsersPageContent({ currentUser }: UsersPageClientProps) {
     enabled: isAdmin,
   });
 
-  // Fetch system settings for currency display
-  const { data: systemSettings } = useQuery({
-    queryKey: ["system-settings"],
-    queryFn: async () => {
-      const response = await fetch("/api/system-settings");
-      if (!response.ok) throw new Error("Failed to fetch settings");
-      return response.json() as Promise<{ currencyDisplay: CurrencyCode }>;
-    },
-    staleTime: 30_000,
-  });
-
   const pageUserIds = useMemo(
     () => (data?.pages ?? []).map((page) => page.users.map((u) => u.id)),
     [data]
@@ -207,40 +196,56 @@ function UsersPageContent({ currentUser }: UsersPageClientProps) {
   }, [usageDatasetKey]);
 
   useEffect(() => {
-    if (!isAdmin || isLoading || isFetching || pageUserIds.length === 0) {
+    if (!isAdmin || pageUserIds.length === 0) {
       return;
     }
 
     const abortController = new AbortController();
     const requestedDatasetKey = usageDatasetKey;
 
-    void loadUserUsagePagesSequentially({
-      pageUserIds,
-      signal: abortController.signal,
-      fetchUsagePage: async (userIds) => {
-        const result = await queryClient.fetchQuery({
-          queryKey: ["users-usage", userIds],
-          queryFn: () => getUsersUsageBatch(userIds),
-          staleTime: 60_000,
-        });
-        return result.ok ? result.data.usageByKeyId : {};
-      },
-      onPageLoaded: (pageUsageByKeyId) => {
-        if (latestUsageDatasetKeyRef.current !== requestedDatasetKey) {
-          return;
-        }
+    const scheduleUsageHydration = () => {
+      if (abortController.signal.aborted) {
+        return;
+      }
 
-        setUsageByKeyId((previous) => ({
-          ...previous,
-          ...pageUsageByKeyId,
-        }));
-      },
-    });
+      void loadUserUsagePagesSequentially({
+        pageUserIds,
+        signal: abortController.signal,
+        fetchUsagePage: async (userIds) => {
+          const result = await queryClient.fetchQuery({
+            queryKey: ["users-usage", userIds],
+            queryFn: () => getUsersUsageBatch(userIds),
+            staleTime: 60_000,
+          });
+          return result.ok ? result.data.usageByKeyId : {};
+        },
+        onPageLoaded: (pageUsageByKeyId) => {
+          if (latestUsageDatasetKeyRef.current !== requestedDatasetKey) {
+            return;
+          }
 
+          setUsageByKeyId((previous) => ({
+            ...previous,
+            ...pageUsageByKeyId,
+          }));
+        },
+      });
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const idleCallbackId = window.requestIdleCallback(scheduleUsageHydration, { timeout: 1000 });
+      return () => {
+        abortController.abort();
+        window.cancelIdleCallback(idleCallbackId);
+      };
+    }
+
+    const timeoutId = globalThis.setTimeout(scheduleUsageHydration, 300);
     return () => {
       abortController.abort();
+      globalThis.clearTimeout(timeoutId);
     };
-  }, [isAdmin, isFetching, isLoading, pageUserIds, queryClient, usageDatasetKey]);
+  }, [isAdmin, pageUserIds, queryClient, usageDatasetKey]);
 
   const coreUsers = useMemo(() => data?.pages.flatMap((page) => page.users) ?? [], [data]);
 
@@ -768,7 +773,7 @@ function UsersPageContent({ currentUser }: UsersPageClientProps) {
             onLoadMore={fetchNextPage}
             scrollResetKey={scrollResetKey}
             currentUser={currentUser}
-            currencyCode={systemSettings?.currencyDisplay ?? "USD"}
+            currencyCode={currencyCode}
             onCreateUser={isAdmin ? handleCreateUser : handleCreateKey}
             onAddKey={handleAddKey}
             highlightKeyIds={shouldHighlightKeys ? matchingKeyIds : undefined}

@@ -148,14 +148,112 @@ describe("editKey: expiresAt 清除/不更新语义", () => {
     expect(Number.isNaN((updatePayload.expires_at as Date).getTime())).toBe(false);
   });
 
-  test("携带非法 expiresAt 字符串应返回 INVALID_FORMAT", async () => {
+  test("携带 durationDays 且当前未过期时，应在原 expiresAt 基础上顺延", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     const { editKey } = await import("@/actions/keys");
 
-    const res = await editKey(1, { name: "k2", expiresAt: "not-a-date" });
+    const res = await editKey(1, { name: "k2", durationDays: 7 });
+
+    expect(res.ok).toBe(true);
+    const updatePayload = updateKeyMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(updatePayload.duration_days).toBe(7);
+    expect(updatePayload.expires_at).toBeInstanceOf(Date);
+    expect((updatePayload.expires_at as Date).toISOString()).toBe("2026-01-11T23:59:59.999Z");
+    vi.useRealTimers();
+  });
+
+  test("携带 durationDays 且当前已过期时，应清空 expiresAt 等待下次真实请求激活", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T00:00:00.000Z"));
+    findKeyByIdMock.mockResolvedValueOnce({
+      id: 1,
+      userId: 10,
+      key: "sk-test",
+      name: "k",
+      isEnabled: true,
+      expiresAt: new Date("2026-01-04T23:59:59.999Z"),
+      canLoginWebUi: true,
+      limit5hUsd: null,
+      limitDailyUsd: null,
+      dailyResetMode: "fixed",
+      dailyResetTime: "00:00",
+      limitWeeklyUsd: null,
+      limitMonthlyUsd: null,
+      limitTotalUsd: null,
+      limitConcurrentSessions: 0,
+      providerGroup: "default",
+      cacheTtlPreference: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    });
+
+    const { editKey } = await import("@/actions/keys");
+    const res = await editKey(1, { name: "k2", durationDays: 7 });
+
+    expect(res.ok).toBe(true);
+    expect(updateKeyMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        duration_days: 7,
+        expires_at: null,
+      })
+    );
+    vi.useRealTimers();
+  });
+
+  test("同时携带 expiresAt 和 durationDays 时应校验失败", async () => {
+    const { editKey } = await import("@/actions/keys");
+
+    const res = await editKey(1, { name: "k2", expiresAt: "2026-01-04", durationDays: 7 });
 
     expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.errorCode).toBe("INVALID_FORMAT");
-    }
+  });
+});
+
+describe("renewKeyExpiresAt: 绝对续期语义", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+    findKeyByIdMock.mockResolvedValue({
+      id: 1,
+      userId: 10,
+      key: "sk-test",
+      name: "k",
+      isEnabled: true,
+      expiresAt: null,
+      durationDays: 7,
+      canLoginWebUi: true,
+      limit5hUsd: null,
+      limitDailyUsd: null,
+      dailyResetMode: "fixed",
+      dailyResetTime: "00:00",
+      limitWeeklyUsd: null,
+      limitMonthlyUsd: null,
+      limitTotalUsd: null,
+      limitConcurrentSessions: 0,
+      providerGroup: "default",
+      cacheTtlPreference: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    });
+    updateKeyMock.mockResolvedValue({ id: 1 });
+  });
+
+  test("快捷续期写入绝对 expires_at 时应清除 duration_days", async () => {
+    const { renewKeyExpiresAt } = await import("@/actions/keys");
+
+    const res = await renewKeyExpiresAt(1, { expiresAt: "2026-01-20T00:00:00.000Z" });
+
+    expect(res.ok).toBe(true);
+    expect(updateKeyMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        expires_at: expect.any(Date),
+        duration_days: null,
+      })
+    );
   });
 });

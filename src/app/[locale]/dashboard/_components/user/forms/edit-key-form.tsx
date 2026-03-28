@@ -43,6 +43,7 @@ interface EditKeyFormProps {
     id: number;
     name: string;
     expiresAt: string;
+    durationDays?: number | null;
     canLoginWebUi?: boolean;
     providerGroup?: string | null;
     cacheTtlPreference?: "inherit" | "5m" | "1h";
@@ -126,6 +127,7 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
     defaultValues: {
       name: keyData?.name || "",
       expiresAt: formatExpiresAt(keyData?.expiresAt || ""),
+      durationDays: keyData?.durationDays ?? null,
       canLoginWebUi: keyData?.canLoginWebUi ?? true,
       providerGroup: keyData?.providerGroup || PROVIDER_GROUP.DEFAULT,
       cacheTtlPreference: keyData?.cacheTtlPreference ?? "inherit",
@@ -149,6 +151,7 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
             name: data.name,
             // 重要：清除到期时间时用空字符串表达，避免 undefined 在 Server Action 序列化时被丢弃
             expiresAt: data.expiresAt ?? "",
+            durationDays: data.durationDays,
             canLoginWebUi: data.canLoginWebUi,
             cacheTtlPreference: data.cacheTtlPreference,
             limit5hUsd: data.limit5hUsd,
@@ -225,6 +228,14 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
         onChange={(val) => form.setValue("expiresAt", val)}
         error={form.getFieldProps("expiresAt").error}
         touched={form.getFieldProps("expiresAt").touched}
+      />
+
+      <NumberField
+        label={t("durationDays.label")}
+        placeholder={t("durationDays.placeholder")}
+        description={t("durationDays.description")}
+        min={1}
+        {...form.getFieldProps("durationDays")}
       />
 
       {/* Balance Query Page toggle uses inverted logic by design:

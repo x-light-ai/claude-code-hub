@@ -4,16 +4,11 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, Filter, Loader2, RefreshCw, ScrollText, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  getMyAvailableEndpoints,
-  getMyAvailableModels,
-  getMyUsageLogsBatch,
-} from "@/actions/my-usage";
+import { getMyAvailableModels, getMyUsageLogsBatch } from "@/actions/my-usage";
 import { LogsDateRangePicker } from "@/app/[locale]/dashboard/logs/_components/logs-date-range-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -37,10 +32,6 @@ interface Filters {
   startDate?: string;
   endDate?: string;
   model?: string;
-  statusCode?: number;
-  excludeStatusCode200?: boolean;
-  endpoint?: string;
-  minRetryCount?: number;
 }
 
 export function UsageLogsSection({
@@ -50,20 +41,20 @@ export function UsageLogsSection({
 }: UsageLogsSectionProps) {
   const t = useTranslations("myUsage.logs");
   const tCollapsible = useTranslations("myUsage.logsCollapsible");
-  const tDashboard = useTranslations("dashboard");
   const tCommon = useTranslations("common");
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [models, setModels] = useState<string[]>([]);
-  const [endpoints, setEndpoints] = useState<string[]>([]);
   const [isModelsLoading, setIsModelsLoading] = useState(true);
-  const [isEndpointsLoading, setIsEndpointsLoading] = useState(true);
   const [draftFilters, setDraftFilters] = useState<Filters>({});
   const [appliedFilters, setAppliedFilters] = useState<Filters>({});
   const [isBrowsingHistory, setIsBrowsingHistory] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
     setIsModelsLoading(true);
-    setIsEndpointsLoading(true);
 
     void getMyAvailableModels()
       .then((modelsResult) => {
@@ -72,18 +63,11 @@ export function UsageLogsSection({
         }
       })
       .finally(() => setIsModelsLoading(false));
-
-    void getMyAvailableEndpoints()
-      .then((endpointsResult) => {
-        if (endpointsResult.ok && endpointsResult.data) {
-          setEndpoints(endpointsResult.data);
-        }
-      })
-      .finally(() => setIsEndpointsLoading(false));
-  }, []);
+  }, [isOpen]);
 
   const query = useInfiniteQuery({
     queryKey: ["my-usage-logs-batch", appliedFilters],
+    enabled: isOpen,
     queryFn: async ({ pageParam }) => {
       const result = await getMyUsageLogsBatch({
         ...appliedFilters,
@@ -101,7 +85,7 @@ export function UsageLogsSection({
     refetchOnWindowFocus: false,
     refetchInterval: autoRefreshSeconds
       ? (query) => {
-          if (isBrowsingHistory) return false;
+          if (!isOpen || isBrowsingHistory) return false;
           if (query.state.fetchStatus !== "idle") return false;
           return autoRefreshSeconds * 1000;
         }
@@ -125,9 +109,6 @@ export function UsageLogsSection({
     let count = 0;
     if (appliedFilters.startDate || appliedFilters.endDate) count++;
     if (appliedFilters.model) count++;
-    if (appliedFilters.endpoint) count++;
-    if (appliedFilters.statusCode || appliedFilters.excludeStatusCode200) count++;
-    if (appliedFilters.minRetryCount) count++;
     return count;
   }, [appliedFilters]);
 
@@ -309,7 +290,7 @@ export function UsageLogsSection({
         <CollapsibleContent>
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-12">
-              <div className="space-y-1.5 lg:col-span-4">
+              <div className="space-y-1.5 lg:col-span-6">
                 <Label>
                   {t("filters.startDate")} / {t("filters.endDate")}
                 </Label>
@@ -320,7 +301,7 @@ export function UsageLogsSection({
                   serverTimeZone={serverTimeZone}
                 />
               </div>
-              <div className="space-y-1.5 lg:col-span-4">
+              <div className="space-y-1.5 lg:col-span-6">
                 <Label>{t("filters.model")}</Label>
                 <Select
                   value={draftFilters.model ?? "__all__"}
@@ -343,85 +324,6 @@ export function UsageLogsSection({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5 lg:col-span-4">
-                <Label>{tDashboard("logs.filters.endpoint")}</Label>
-                <Select
-                  value={draftFilters.endpoint ?? "__all__"}
-                  onValueChange={(value) =>
-                    handleFilterChange({ endpoint: value === "__all__" ? undefined : value })
-                  }
-                  disabled={isEndpointsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        isEndpointsLoading
-                          ? tCommon("loading")
-                          : tDashboard("logs.filters.allEndpoints")
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">
-                      {tDashboard("logs.filters.allEndpoints")}
-                    </SelectItem>
-                    {endpoints.map((endpoint) => (
-                      <SelectItem key={endpoint} value={endpoint}>
-                        {endpoint}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 lg:col-span-4">
-                <Label>{t("filters.status")}</Label>
-                <Select
-                  value={
-                    draftFilters.excludeStatusCode200
-                      ? "!200"
-                      : (draftFilters.statusCode?.toString() ?? "__all__")
-                  }
-                  onValueChange={(value) =>
-                    handleFilterChange({
-                      statusCode:
-                        value === "__all__" || value === "!200"
-                          ? undefined
-                          : Number.parseInt(value, 10),
-                      excludeStatusCode200: value === "!200",
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("filters.allStatus")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("filters.allStatus")}</SelectItem>
-                    <SelectItem value="!200">{tDashboard("logs.statusCodes.not200")}</SelectItem>
-                    <SelectItem value="200">200</SelectItem>
-                    <SelectItem value="400">400</SelectItem>
-                    <SelectItem value="401">401</SelectItem>
-                    <SelectItem value="429">429</SelectItem>
-                    <SelectItem value="500">500</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 lg:col-span-4">
-                <Label>{tDashboard("logs.filters.minRetryCount")}</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={draftFilters.minRetryCount?.toString() ?? ""}
-                  placeholder={tDashboard("logs.filters.minRetryCountPlaceholder")}
-                  onChange={(e) =>
-                    handleFilterChange({
-                      minRetryCount: e.target.value
-                        ? Number.parseInt(e.target.value, 10)
-                        : undefined,
-                    })
-                  }
-                />
               </div>
             </div>
 

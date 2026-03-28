@@ -925,6 +925,11 @@
       "placeholder": "选择过期时间",
       "description": "留空表示永不过期"
     },
+    "durationDays": {
+      "label": "相对有效期（天）",
+      "placeholder": "留空表示不启用",
+      "description": "首次真实 API 请求时开始计时；与固定过期时间互斥。若当前 Key 尚未过期，重新设置后会在现有到期时间基础上顺延。"
+    },
     "canLoginWebUi": {
       "label": "允许登录 Web UI",
       "description": "关闭后，此 Key 仅可用于 API 调用，无法登录管理后台"

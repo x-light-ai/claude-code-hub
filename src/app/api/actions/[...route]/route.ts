@@ -19,6 +19,7 @@ import { apiReference } from "@scalar/hono-api-reference";
 import { handle } from "hono/vercel";
 import { z } from "zod";
 import * as activeSessionActions from "@/actions/active-sessions";
+import * as deliveryActions from "@/actions/delivery";
 import * as keyActions from "@/actions/keys";
 import * as modelPriceActions from "@/actions/model-prices";
 import * as myUsageActions from "@/actions/my-usage";
@@ -371,6 +372,44 @@ const { route: getUserLimitUsageRoute, handler: getUserLimitUsageHandler } = cre
 );
 app.openapi(getUserLimitUsageRoute, getUserLimitUsageHandler);
 
+// ==================== 发货接口 ====================
+
+const deliveryProvisionRequestSchema = z.object({
+  username: z.string().min(1),
+  expiresAt: z.string().min(1),
+  dailyLimitUsd: z.number().optional(),
+  limitConcurrentSessions: z.number().optional(),
+  dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
+  dailyResetTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  regenerateKey: z.boolean().optional(),
+});
+
+const { route: provisionDeliveryRoute, handler: provisionDeliveryHandler } = createActionRoute(
+  "delivery",
+  "provision",
+  deliveryActions.provision,
+  {
+    requestSchema: deliveryProvisionRequestSchema,
+    responseSchema: z.object({
+      apiKey: z.string(),
+      userId: z.number(),
+      username: z.string(),
+      expiresAt: z.string(),
+      isNewUser: z.boolean(),
+      isNewKey: z.boolean(),
+    }),
+    description: "发货开通账号并返回 API Key",
+    summary: "发货开通",
+    tags: ["发货接口"],
+    requiredRole: "admin",
+    argsMapper: (body) => [body],
+  }
+);
+app.openapi(provisionDeliveryRoute, provisionDeliveryHandler);
+
 // ==================== 密钥管理 ====================
 
 const { route: getKeysRoute, handler: getKeysHandler } = createActionRoute(
@@ -397,6 +436,7 @@ const { route: addKeyRoute, handler: addKeyHandler } = createActionRoute(
       userId: z.number().int().positive(),
       name: z.string(),
       expiresAt: z.string().optional(),
+      durationDays: z.number().int().positive().nullable().optional(),
       canLoginWebUi: z.boolean().optional(),
       limit5hUsd: z.number().nullable().optional(),
       limitDailyUsd: z.number().nullable().optional(),
@@ -433,6 +473,7 @@ const { route: editKeyRoute, handler: editKeyHandler } = createActionRoute(
       keyId: z.number().int().positive(),
       name: z.string(),
       expiresAt: z.string().optional(),
+      durationDays: z.number().int().positive().nullable().optional(),
       canLoginWebUi: z.boolean().optional(),
       limit5hUsd: z.number().nullable().optional(),
       limitDailyUsd: z.number().nullable().optional(),

@@ -2,7 +2,7 @@
 
 import { and, count, desc, eq, gt, gte, inArray, isNull, lt, or, sql, sum } from "drizzle-orm";
 import { db } from "@/drizzle/db";
-import { keys, providers, usageLedger, users } from "@/drizzle/schema";
+import { keyRelativeExpiries, keys, providers, usageLedger, users } from "@/drizzle/schema";
 import { CHANNEL_API_KEYS_UPDATED, publishCacheInvalidation } from "@/lib/redis/pubsub";
 import {
   cacheActiveKey,
@@ -19,6 +19,88 @@ import type { User } from "@/types/user";
 import { LEDGER_BILLING_CONDITION } from "./_shared/ledger-conditions";
 import { toKey, toUser } from "./_shared/transformers";
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+async function upsertKeyRelativeExpiry(keyId: number, durationDays: number): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(keyRelativeExpiries)
+    .values({
+      keyId,
+      durationDays,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: keyRelativeExpiries.keyId,
+      set: {
+        durationDays,
+        updatedAt: now,
+      },
+    });
+}
+
+async function deleteKeyRelativeExpiry(keyId: number): Promise<void> {
+  await db.delete(keyRelativeExpiries).where(eq(keyRelativeExpiries.keyId, keyId));
+}
+
+async function getKeyRelativeExpiryDurationDays(keyId: number): Promise<number | null> {
+  const [row] = await db
+    .select({ durationDays: keyRelativeExpiries.durationDays })
+    .from(keyRelativeExpiries)
+    .where(eq(keyRelativeExpiries.keyId, keyId));
+  return row?.durationDays ?? null;
+}
+
+async function activateRelativeExpiryIfNeeded(
+  keyId: number,
+  requestStartTime: number,
+  durationDays: number
+): Promise<Date | null> {
+  const expiresAt = new Date(requestStartTime + durationDays * DAY_IN_MS);
+  const [updated] = await db
+    .update(keys)
+    .set({
+      expiresAt,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(keys.id, keyId), isNull(keys.deletedAt), isNull(keys.expiresAt)))
+    .returning({ expiresAt: keys.expiresAt });
+
+  if (updated?.expiresAt) {
+    return updated.expiresAt;
+  }
+
+  const [current] = await db
+    .select({ expiresAt: keys.expiresAt })
+    .from(keys)
+    .where(and(eq(keys.id, keyId), isNull(keys.deletedAt)));
+
+  return current?.expiresAt ?? null;
+}
+async function getActivatedRelativeExpiry(
+  key: Key,
+  requestStartTime?: number
+): Promise<Key | null> {
+  if (key.durationDays == null || key.expiresAt) {
+    return key;
+  }
+
+  if (requestStartTime == null) {
+    return null;
+  }
+
+  const expiresAt = await activateRelativeExpiryIfNeeded(key.id, requestStartTime, key.durationDays);
+  if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+    return null;
+  }
+
+  return toKey({
+    ...key,
+    expiresAt,
+  });
+}
+
 export async function findKeyById(id: number): Promise<Key | null> {
   const [key] = await db
     .select({
@@ -28,6 +110,7 @@ export async function findKeyById(id: number): Promise<Key | null> {
       name: keys.name,
       isEnabled: keys.isEnabled,
       expiresAt: keys.expiresAt,
+      durationDays: keyRelativeExpiries.durationDays,
       canLoginWebUi: keys.canLoginWebUi,
       limit5hUsd: keys.limit5hUsd,
       limitDailyUsd: keys.limitDailyUsd,
@@ -45,6 +128,7 @@ export async function findKeyById(id: number): Promise<Key | null> {
       deletedAt: keys.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .where(and(eq(keys.id, id), isNull(keys.deletedAt)));
 
   if (!key) return null;
@@ -60,6 +144,7 @@ export async function findKeyList(userId: number): Promise<Key[]> {
       name: keys.name,
       isEnabled: keys.isEnabled,
       expiresAt: keys.expiresAt,
+      durationDays: keyRelativeExpiries.durationDays,
       canLoginWebUi: keys.canLoginWebUi,
       limit5hUsd: keys.limit5hUsd,
       limitDailyUsd: keys.limitDailyUsd,
@@ -77,6 +162,7 @@ export async function findKeyList(userId: number): Promise<Key[]> {
       deletedAt: keys.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .where(and(eq(keys.userId, userId), isNull(keys.deletedAt)))
     .orderBy(keys.createdAt);
 
@@ -100,6 +186,7 @@ export async function findKeyListBatch(userIds: number[]): Promise<Map<number, K
       name: keys.name,
       isEnabled: keys.isEnabled,
       expiresAt: keys.expiresAt,
+      durationDays: keyRelativeExpiries.durationDays,
       canLoginWebUi: keys.canLoginWebUi,
       limit5hUsd: keys.limit5hUsd,
       limitDailyUsd: keys.limitDailyUsd,
@@ -117,6 +204,7 @@ export async function findKeyListBatch(userIds: number[]): Promise<Map<number, K
       deletedAt: keys.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .where(and(inArray(keys.userId, userIds), isNull(keys.deletedAt)))
     .orderBy(keys.userId, keys.createdAt);
 
@@ -182,7 +270,14 @@ export async function createKey(keyData: CreateKeyData): Promise<Key> {
     deletedAt: keys.deletedAt,
   });
 
-  const created = toKey(key);
+  if (keyData.duration_days != null) {
+    await upsertKeyRelativeExpiry(key.id, keyData.duration_days);
+  }
+
+  const created = toKey({
+    ...key,
+    durationDays: keyData.duration_days ?? null,
+  });
   // 将新建 key 写入 Vacuum Filter（提升新 key 的即时可用性；失败不影响正确性）
   try {
     apiKeyVacuumFilter.noteExistingKey(created.key);
@@ -278,7 +373,20 @@ export async function updateKey(id: number, keyData: UpdateKeyData): Promise<Key
     });
 
   if (!key) return null;
-  const updated = toKey(key);
+
+  if (keyData.duration_days === null) {
+    await deleteKeyRelativeExpiry(id);
+  } else if (keyData.duration_days !== undefined) {
+    await upsertKeyRelativeExpiry(id, keyData.duration_days);
+  }
+
+  const durationDays =
+    keyData.duration_days !== undefined ? keyData.duration_days : await getKeyRelativeExpiryDurationDays(id);
+
+  const updated = toKey({
+    ...key,
+    durationDays,
+  });
   // 变更 key 后，根据活跃状态更新/失效 Redis 缓存（最佳努力，不影响正确性）
   const expiresAtMs = updated.expiresAt instanceof Date ? updated.expiresAt.getTime() : null;
   const isExpired = typeof expiresAtMs === "number" && expiresAtMs <= Date.now();
@@ -303,6 +411,7 @@ export async function findActiveKeyByUserIdAndName(
       name: keys.name,
       isEnabled: keys.isEnabled,
       expiresAt: keys.expiresAt,
+      durationDays: keyRelativeExpiries.durationDays,
       canLoginWebUi: keys.canLoginWebUi,
       limit5hUsd: keys.limit5hUsd,
       limitDailyUsd: keys.limitDailyUsd,
@@ -320,13 +429,17 @@ export async function findActiveKeyByUserIdAndName(
       deletedAt: keys.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .where(
       and(
         eq(keys.userId, userId),
         eq(keys.name, name),
         isNull(keys.deletedAt),
         eq(keys.isEnabled, true),
-        or(isNull(keys.expiresAt), gt(keys.expiresAt, new Date()))
+        or(
+          gt(keys.expiresAt, new Date()),
+          and(isNull(keys.expiresAt), sql`${keyRelativeExpiries.keyId} IS NULL`)
+        )
       )
     );
 
@@ -499,6 +612,7 @@ export async function findActiveKeyByKeyString(keyString: string): Promise<Key |
       name: keys.name,
       isEnabled: keys.isEnabled,
       expiresAt: keys.expiresAt,
+      durationDays: keyRelativeExpiries.durationDays,
       canLoginWebUi: keys.canLoginWebUi,
       limit5hUsd: keys.limit5hUsd,
       limitDailyUsd: keys.limitDailyUsd,
@@ -516,12 +630,16 @@ export async function findActiveKeyByKeyString(keyString: string): Promise<Key |
       deletedAt: keys.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .where(
       and(
         eq(keys.key, keyString),
         isNull(keys.deletedAt),
         eq(keys.isEnabled, true),
-        or(isNull(keys.expiresAt), gt(keys.expiresAt, new Date()))
+        or(
+          gt(keys.expiresAt, new Date()),
+          and(isNull(keys.expiresAt), sql`${keyRelativeExpiries.keyId} IS NULL`)
+        )
       )
     );
 
@@ -533,7 +651,8 @@ export async function findActiveKeyByKeyString(keyString: string): Promise<Key |
 
 // 验证 API Key 并返回用户信息
 export async function validateApiKeyAndGetUser(
-  keyString: string
+  keyString: string,
+  requestStartTime?: number
 ): Promise<{ user: User; key: Key } | null> {
   const vfSaysMissing = apiKeyVacuumFilter.isDefinitelyNotPresent(keyString) === true;
 
@@ -546,9 +665,15 @@ export async function validateApiKeyAndGetUser(
       apiKeyVacuumFilter.noteExistingKey(keyString);
     }
 
-    const cachedUser = await getCachedUser(cachedKey.userId);
+    const activatedCachedKey = await getActivatedRelativeExpiry(cachedKey, requestStartTime);
+    if (!activatedCachedKey) {
+      await invalidateCachedKey(keyString).catch(() => {});
+      return null;
+    }
+
+    const cachedUser = await getCachedUser(activatedCachedKey.userId);
     if (cachedUser) {
-      return { user: cachedUser, key: cachedKey };
+      return { user: cachedUser, key: activatedCachedKey };
     }
 
     // user 缓存 miss：仅补齐 user（相较 join 更轻量）
@@ -579,7 +704,7 @@ export async function validateApiKeyAndGetUser(
         allowedModels: users.allowedModels,
       })
       .from(users)
-      .where(and(eq(users.id, cachedKey.userId), isNull(users.deletedAt)));
+      .where(and(eq(users.id, activatedCachedKey.userId), isNull(users.deletedAt)));
 
     if (!userRow) {
       // join 语义：用户被删除则 key 无效；顺带清理 key 缓存避免重复 miss
@@ -589,7 +714,8 @@ export async function validateApiKeyAndGetUser(
 
     const user = toUser(userRow);
     cacheUser(user).catch(() => {});
-    return { user, key: cachedKey };
+    cacheActiveKey(activatedCachedKey).catch(() => {});
+    return { user, key: activatedCachedKey };
   }
 
   // Vacuum Filter 负向短路：肯定不存在则直接返回 null，避免打 DB
@@ -607,6 +733,7 @@ export async function validateApiKeyAndGetUser(
       keyName: keys.name,
       keyIsEnabled: keys.isEnabled,
       keyExpiresAt: keys.expiresAt,
+      keyDurationDays: keyRelativeExpiries.durationDays,
       keyCanLoginWebUi: keys.canLoginWebUi,
       keyLimit5hUsd: keys.limit5hUsd,
       keyLimitDailyUsd: keys.limitDailyUsd,
@@ -647,13 +774,18 @@ export async function validateApiKeyAndGetUser(
       userDeletedAt: users.deletedAt,
     })
     .from(keys)
+    .leftJoin(keyRelativeExpiries, eq(keyRelativeExpiries.keyId, keys.id))
     .innerJoin(users, eq(keys.userId, users.id))
     .where(
       and(
         eq(keys.key, keyString),
         isNull(keys.deletedAt),
         eq(keys.isEnabled, true),
-        or(isNull(keys.expiresAt), gt(keys.expiresAt, new Date())),
+        or(
+          gt(keys.expiresAt, new Date()),
+          and(isNull(keys.expiresAt), sql`${keyRelativeExpiries.keyId} IS NOT NULL`),
+          and(isNull(keys.expiresAt), sql`${keyRelativeExpiries.keyId} IS NULL`)
+        ),
         isNull(users.deletedAt)
       )
     );
@@ -696,6 +828,7 @@ export async function validateApiKeyAndGetUser(
     name: row.keyName,
     isEnabled: row.keyIsEnabled,
     expiresAt: row.keyExpiresAt,
+    durationDays: row.keyDurationDays,
     canLoginWebUi: row.keyCanLoginWebUi,
     limit5hUsd: row.keyLimit5hUsd,
     limitDailyUsd: row.keyLimitDailyUsd,
@@ -713,9 +846,14 @@ export async function validateApiKeyAndGetUser(
     deletedAt: row.keyDeletedAt,
   });
 
+  const activatedKey = await getActivatedRelativeExpiry(key, requestStartTime);
+  if (!activatedKey) {
+    return null;
+  }
+
   // 最佳努力：写入 Redis 缓存（不影响正确性）
-  cacheAuthResult(keyString, { user, key }).catch(() => {});
-  return { user, key };
+  cacheAuthResult(keyString, { user, key: activatedKey }).catch(() => {});
+  return { user, key: activatedKey };
 }
 
 /**

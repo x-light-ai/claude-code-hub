@@ -191,6 +191,51 @@ describe("API Key 鉴权缓存：VacuumFilter -> Redis -> DB", () => {
     expect(dbSelect).not.toHaveBeenCalled();
   });
 
+  test("validateApiKeyAndGetUser：未激活的相对有效期 key 在真实请求时应激活后返回", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    const cachedKey = buildKey({ key: "sk-relative", userId: 10, durationDays: 7, expiresAt: null });
+    const cachedUser = buildUser({ id: 10 });
+    const activatedExpiresAt = new Date("2026-01-08T00:00:00.000Z");
+    getCachedActiveKey.mockResolvedValueOnce(cachedKey);
+    getCachedUser.mockResolvedValueOnce(cachedUser);
+    dbUpdate.mockReturnValueOnce({
+      set: () => ({
+        where: () => ({
+          returning: async () => [{ expiresAt: activatedExpiresAt }],
+        }),
+      }),
+    });
+
+    try {
+      const { validateApiKeyAndGetUser } = await import("@/repository/key");
+      const result = await validateApiKeyAndGetUser(
+        "sk-relative",
+        new Date("2026-01-01T00:00:00.000Z").getTime()
+      );
+
+      expect(result?.user).toEqual(cachedUser);
+      expect(result?.key.durationDays).toBe(7);
+      expect(result?.key.expiresAt?.toISOString()).toBe(activatedExpiresAt.toISOString());
+      expect(dbUpdate).toHaveBeenCalledTimes(1);
+      expect(cacheActiveKey).not.toHaveBeenCalled();
+      expect(invalidateCachedKey).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("validateApiKeyAndGetUser：未激活的相对有效期 key 缺少请求开始时间时应返回 null", async () => {
+    const cachedKey = buildKey({ key: "sk-relative-no-start", userId: 10, durationDays: 7, expiresAt: null });
+    getCachedActiveKey.mockResolvedValueOnce(cachedKey);
+
+    const { validateApiKeyAndGetUser } = await import("@/repository/key");
+    await expect(validateApiKeyAndGetUser("sk-relative-no-start")).resolves.toBeNull();
+    expect(invalidateCachedKey).toHaveBeenCalledWith("sk-relative-no-start");
+    expect(dbUpdate).not.toHaveBeenCalled();
+  });
+
   test("validateApiKeyAndGetUser：key Redis 命中 + user miss 时应只查 user 并写回缓存", async () => {
     const cachedKey = buildKey({ key: "sk-cached", userId: 10 });
     getCachedActiveKey.mockResolvedValueOnce(cachedKey);
@@ -284,8 +329,10 @@ describe("API Key 鉴权缓存：VacuumFilter -> Redis -> DB", () => {
 
     dbSelect.mockReturnValueOnce({
       from: () => ({
-        innerJoin: () => ({
-          where: async () => [joinRow],
+        leftJoin: () => ({
+          innerJoin: () => ({
+            where: async () => [joinRow],
+          }),
         }),
       }),
     });
@@ -375,6 +422,11 @@ describe("API Key 鉴权缓存：写入/失效点覆盖", () => {
         where: () => ({
           returning: async () => [keyRow],
         }),
+      }),
+    });
+    dbSelect.mockReturnValueOnce({
+      from: () => ({
+        where: async () => [],
       }),
     });
 

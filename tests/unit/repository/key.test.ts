@@ -7,6 +7,7 @@ const row = {
   keyName: "k1",
   keyIsEnabled: true,
   keyExpiresAt: null,
+  keyDurationDays: null,
   keyCanLoginWebUi: true,
   keyLimit5hUsd: "1.00",
   keyLimitDailyUsd: "2.00",
@@ -46,8 +47,10 @@ const row = {
 
 const selectMock = vi.fn(() => ({
   from: vi.fn(() => ({
-    innerJoin: vi.fn(() => ({
-      where: vi.fn(async () => [row]),
+    leftJoin: vi.fn(() => ({
+      innerJoin: vi.fn(() => ({
+        where: vi.fn(async () => [row]),
+      })),
     })),
   })),
 }));
@@ -59,6 +62,10 @@ vi.mock("@/drizzle/db", () => ({
 }));
 
 vi.mock("@/drizzle/schema", () => ({
+  keyRelativeExpiries: {
+    keyId: "keyRelativeExpiries.keyId",
+    durationDays: "keyRelativeExpiries.durationDays",
+  },
   keys: {
     id: "keys.id",
     userId: "keys.userId",

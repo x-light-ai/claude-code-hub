@@ -281,6 +281,11 @@
         "placeholder": "Select expiration time",
         "description": "Leave blank for never expires"
       },
+      "durationDays": {
+        "label": "Relative Duration (days)",
+        "placeholder": "Leave blank to disable",
+        "description": "Starts counting from the first real API request; mutually exclusive with fixed expiration. If the key is still active, updating this extends from the current expiration time."
+      },
       "canLoginWebUi": {
         "label": "Enable dedicated balance page",
         "description": "Allow users to view their balance via a dedicated page"

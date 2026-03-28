@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { PROVIDER_GROUP } from "@/lib/constants/provider.constants";
 import { useZodForm } from "@/lib/hooks/use-zod-form";
-import { KeyFormSchema, UpdateUserSchema } from "@/lib/validation/schemas";
+import { KeyFormSchemaBase, UpdateUserSchema } from "@/lib/validation/schemas";
 import { KeyEditSection } from "./forms/key-edit-section";
 import { UserEditSection } from "./forms/user-edit-section";
 import { useKeyTranslations } from "./hooks/use-key-translations";
@@ -47,7 +47,7 @@ const CreateUserSchema = UpdateUserSchema.extend({
   dailyQuota: z.number().nullable().optional(),
 });
 
-const CreateKeySchema = KeyFormSchema.extend({
+const CreateKeySchema = KeyFormSchemaBase.extend({
   id: z.number(),
   isEnabled: z.boolean().optional(),
   // 覆盖 expiresAt 以支持 Date 类型（KeyEditSection 返回 Date 对象）
@@ -59,6 +59,14 @@ const CreateKeySchema = KeyFormSchema.extend({
       if (val instanceof Date) return val.toISOString();
       return val;
     }),
+}).superRefine((data, ctx) => {
+  if (data.expiresAt !== undefined && data.durationDays != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定过期时间与相对有效期不能同时设置",
+      path: ["durationDays"],
+    });
+  }
 });
 
 const CreateFormSchema = z.object({

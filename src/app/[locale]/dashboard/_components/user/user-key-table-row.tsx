@@ -605,6 +605,7 @@ export function UserKeyTableRow({
                 id: editingKey.id,
                 name: editingKey.name,
                 expiresAt: editingKey.expiresAt,
+                durationDays: editingKey.durationDays ?? null,
                 canLoginWebUi: editingKey.canLoginWebUi,
                 providerGroup: editingKey.providerGroup ?? null,
                 limit5hUsd: editingKey.limit5hUsd,

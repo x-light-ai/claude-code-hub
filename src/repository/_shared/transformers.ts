@@ -63,6 +63,10 @@ export function toKey(dbKey: any): Key {
     ...dbKey,
     isEnabled: dbKey?.isEnabled ?? true,
     canLoginWebUi: dbKey?.canLoginWebUi ?? true,
+    durationDays:
+      dbKey?.durationDays !== null && dbKey?.durationDays !== undefined
+        ? Number(dbKey.durationDays)
+        : null,
     limit5hUsd: dbKey?.limit5hUsd ? parseFloat(dbKey.limit5hUsd) : null,
     limitDailyUsd: dbKey?.limitDailyUsd ? parseFloat(dbKey.limitDailyUsd) : null,
     dailyResetTime: dbKey?.dailyResetTime ?? "00:00",

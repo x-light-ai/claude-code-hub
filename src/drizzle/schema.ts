@@ -142,6 +142,19 @@ export const keys = pgTable('keys', {
   keysDeletedAtIdx: index('idx_keys_deleted_at').on(table.deletedAt),
 }));
 
+export const keyRelativeExpiries = pgTable('key_relative_expiries', {
+  id: serial('id').primaryKey(),
+  keyId: integer('key_id')
+    .notNull()
+    .references(() => keys.id, { onDelete: 'cascade' }),
+  durationDays: integer('duration_days').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  keyRelativeExpiriesKeyIdUnique: uniqueIndex('uniq_key_relative_expiries_key_id').on(table.keyId),
+  keyRelativeExpiriesCreatedAtIdx: index('idx_key_relative_expiries_created_at').on(table.createdAt),
+}));
+
 // Provider Vendors table - 以官网域名聚合的供应商实体（与 key/providerGroup 字段无关）
 export const providerVendors = pgTable('provider_vendors', {
   id: serial('id').primaryKey(),
@@ -964,7 +977,18 @@ export const keysRelations = relations(keys, ({ one, many }) => ({
     fields: [keys.userId],
     references: [users.id],
   }),
+  relativeExpiry: one(keyRelativeExpiries, {
+    fields: [keys.id],
+    references: [keyRelativeExpiries.keyId],
+  }),
   messageRequests: many(messageRequest),
+}));
+
+export const keyRelativeExpiriesRelations = relations(keyRelativeExpiries, ({ one }) => ({
+  key: one(keys, {
+    fields: [keyRelativeExpiries.keyId],
+    references: [keys.id],
+  }),
 }));
 
 export const providersRelations = relations(providers, ({ many, one }) => ({

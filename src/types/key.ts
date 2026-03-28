@@ -10,6 +10,7 @@ export interface Key {
   key: string;
   isEnabled: boolean;
   expiresAt?: Date;
+  durationDays?: number | null;
 
   // Web UI 登录权限控制
   canLoginWebUi: boolean;
@@ -45,6 +46,7 @@ export interface CreateKeyData {
   key: string;
   is_enabled?: boolean;
   expires_at?: Date | null; // null = 永不过期
+  duration_days?: number | null;
   // Web UI 登录权限控制
   can_login_web_ui?: boolean;
   // 金额限流配置
@@ -71,6 +73,7 @@ export interface UpdateKeyData {
   name?: string;
   is_enabled?: boolean;
   expires_at?: Date | null; // null = 清除日期（永不过期）
+  duration_days?: number | null;
   // Web UI 登录权限控制
   can_login_web_ui?: boolean;
   // 金额限流配置

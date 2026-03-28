@@ -199,7 +199,17 @@ describe("ApiKeyAuthCache：Redis key（哈希/命名/TTL/失效）", () => {
     expect(Object.hasOwn(parsed.key, "key")).toBe(false);
   });
 
-  test("cacheActiveKey + getCachedActiveKey：应可回读并水合 Date 字段", async () => {
+  test("cacheActiveKey：未激活的相对有效期 key 不应写入缓存", async () => {
+    const { cacheActiveKey } = await import("@/lib/security/api-key-auth-cache");
+    const key = buildKey({ key: "sk-relative-pending", durationDays: 7, expiresAt: null });
+
+    await cacheActiveKey(key);
+
+    expect(currentRedis?.setex).not.toHaveBeenCalled();
+    expect(currentRedis?.del).toHaveBeenCalledTimes(1);
+  });
+
+  test("cacheActiveKey + getCachedActiveKey：应正确 roundtrip 日期与字段", async () => {
     const { cacheActiveKey, getCachedActiveKey } = await import(
       "@/lib/security/api-key-auth-cache"
     );

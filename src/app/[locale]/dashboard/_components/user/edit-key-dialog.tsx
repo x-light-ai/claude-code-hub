@@ -18,6 +18,7 @@ export interface EditKeyDialogProps {
     id: number;
     name: string;
     expiresAt: string;
+    durationDays?: number | null;
     canLoginWebUi?: boolean;
     providerGroup?: string | null;
     cacheTtlPreference?: "inherit" | "5m" | "1h";

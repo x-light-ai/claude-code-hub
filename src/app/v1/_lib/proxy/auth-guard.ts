@@ -73,6 +73,7 @@ export class ProxyAuthenticator {
       apiKeyHeader,
       geminiApiKeyHeader,
       geminiApiKeyQuery,
+      requestStartTime: session.startTime,
     });
     session.setAuthState(authState);
 
@@ -93,6 +94,7 @@ export class ProxyAuthenticator {
     apiKeyHeader?: string;
     geminiApiKeyHeader?: string;
     geminiApiKeyQuery?: string;
+    requestStartTime?: number;
   }): Promise<AuthState> {
     const bearerKey = ProxyAuthenticator.extractKeyFromAuthorization(headers.authHeader);
     const apiKeyHeader = ProxyAuthenticator.normalizeKey(headers.apiKeyHeader);
@@ -146,7 +148,7 @@ export class ProxyAuthenticator {
     }
 
     const apiKey = firstKey;
-    const authResult = await validateApiKeyAndGetUser(apiKey);
+    const authResult = await validateApiKeyAndGetUser(apiKey, headers.requestStartTime);
 
     if (!authResult) {
       logger.debug("[ProxyAuthenticator] API key validation failed", {

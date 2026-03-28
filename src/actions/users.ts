@@ -446,6 +446,7 @@ export async function getUsers(params?: GetUsersBatchParams): Promise<UserDispla
               limitConcurrentSessions: key.limitConcurrentSessions || 0,
               costResetAt: key.costResetAt?.toISOString() ?? null,
               providerGroup: key.providerGroup,
+              durationDays: key.durationDays ?? null,
             };
           }),
         };
@@ -720,6 +721,7 @@ export async function getUsersBatch(
               limitConcurrentSessions: key.limitConcurrentSessions || 0,
               costResetAt: key.costResetAt?.toISOString() ?? null,
               providerGroup: key.providerGroup,
+              durationDays: key.durationDays ?? null,
             };
           }),
         };
@@ -862,6 +864,7 @@ export async function getUsersBatchCore(
           limitConcurrentSessions: key.limitConcurrentSessions || 0,
           costResetAt: key.costResetAt?.toISOString() ?? null,
           providerGroup: key.providerGroup,
+          durationDays: key.durationDays ?? null,
         })),
       };
     });

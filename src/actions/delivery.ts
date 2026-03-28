@@ -1,7 +1,6 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { parseDateInputAsTimezone } from "@/lib/utils/date-input";
@@ -18,6 +17,11 @@ const ProvisionSchema = z.object({
   expiresAt: z.string().min(1, "过期时间不能为空"),
   dailyLimitUsd: z.number().optional(),
   limitConcurrentSessions: z.number().optional(),
+  dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
+  dailyResetTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
+    .optional(),
   regenerateKey: z.boolean().optional().default(false),
 });
 
@@ -39,14 +43,21 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
       return { ok: false, error: "需要管理员权限" };
     }
 
-    const t = await getTranslations("validation");
     const validated = ProvisionSchema.safeParse(data);
     if (!validated.success) {
-      return { ok: false, error: formatZodError(validated.error, t) };
+      return { ok: false, error: formatZodError(validated.error) };
     }
 
-    const { username, expiresAt, dailyLimitUsd, limitConcurrentSessions, regenerateKey } =
-      validated.data;
+    const {
+      username,
+      expiresAt,
+      dailyLimitUsd,
+      limitConcurrentSessions,
+      dailyResetMode,
+      dailyResetTime,
+      regenerateKey,
+    } = validated.data;
+    const effectiveDailyResetMode = dailyResetMode ?? "rolling";
 
     const timezone = await resolveSystemTimezone();
     const expiresAtDate = parseDateInputAsTimezone(expiresAt, timezone);
@@ -60,6 +71,8 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
         description: "发货系统自动创建",
         dailyQuota: dailyLimitUsd,
         limitConcurrentSessions,
+        dailyResetMode: effectiveDailyResetMode,
+        dailyResetTime,
         expiresAt: expiresAtDate,
       });
       isNewUser = true;
@@ -67,6 +80,8 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
       await updateUser(user.id, {
         dailyQuota: dailyLimitUsd,
         limitConcurrentSessions,
+        dailyResetMode: effectiveDailyResetMode,
+        dailyResetTime,
         expiresAt: expiresAtDate,
       });
     }

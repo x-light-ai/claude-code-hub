@@ -57,6 +57,7 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
     defaultValues: {
       name: "",
       expiresAt: "",
+      durationDays: null,
       canLoginWebUi: false,
       providerGroup: PROVIDER_GROUP.DEFAULT,
       cacheTtlPreference: "inherit",
@@ -80,6 +81,7 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
           name: data.name,
           // 重要：清除到期时间时用空字符串表达，避免 undefined 在 Server Action 序列化时被丢弃
           expiresAt: data.expiresAt ?? "",
+          durationDays: data.durationDays,
           canLoginWebUi: data.canLoginWebUi,
           limit5hUsd: data.limit5hUsd,
           limitDailyUsd: data.limitDailyUsd,
@@ -167,6 +169,14 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
         onChange={(val) => form.setValue("expiresAt", val)}
         error={form.getFieldProps("expiresAt").error}
         touched={form.getFieldProps("expiresAt").touched}
+      />
+
+      <NumberField
+        label={t("durationDays.label")}
+        placeholder={t("durationDays.placeholder")}
+        description={t("durationDays.description")}
+        min={1}
+        {...form.getFieldProps("durationDays")}
       />
 
       {/* Balance Query Page toggle uses inverted logic by design:

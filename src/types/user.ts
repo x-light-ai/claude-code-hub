@@ -132,6 +132,7 @@ export interface UserKeyDisplay {
   costResetAt?: string | null; // 软重置时间
   // Provider group override (null = inherit from user)
   providerGroup?: string | null;
+  durationDays?: number | null;
 }
 
 /**

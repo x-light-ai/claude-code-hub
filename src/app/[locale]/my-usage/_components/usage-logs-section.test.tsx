@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   getMyUsageLogs: vi.fn(),
   getMyUsageLogsBatch: vi.fn(),
   getMyAvailableModels: vi.fn(),
-  getMyAvailableEndpoints: vi.fn(),
 }));
 
 vi.mock("next-intl", () => ({
@@ -25,7 +24,6 @@ vi.mock("@/actions/my-usage", () => ({
   getMyUsageLogs: mocks.getMyUsageLogs,
   getMyUsageLogsBatch: mocks.getMyUsageLogsBatch,
   getMyAvailableModels: mocks.getMyAvailableModels,
-  getMyAvailableEndpoints: mocks.getMyAvailableEndpoints,
 }));
 
 vi.mock("@/app/[locale]/dashboard/logs/_components/logs-date-range-picker", () => ({
@@ -107,7 +105,6 @@ describe("my-usage usage logs section", () => {
       data: { logs: [], total: 0, page: 1, pageSize: 20, currencyCode: "USD" },
     });
     mocks.getMyAvailableModels.mockResolvedValue({ ok: true, data: [] });
-    mocks.getMyAvailableEndpoints.mockResolvedValue({ ok: true, data: [] });
 
     const container = document.createElement("div");
     document.body.appendChild(container);

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "@/i18n/routing";
 import { getSession } from "@/lib/auth";
+import { HideFooter } from "@/components/customs/hide-footer";
 
 export default async function MyUsageLayout({
   children,
@@ -23,6 +24,7 @@ export default async function MyUsageLayout({
   return (
     <div className="min-h-[var(--cch-viewport-height,100vh)] bg-background">
       <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">{children}</main>
+      <HideFooter />
     </div>
   );
 }

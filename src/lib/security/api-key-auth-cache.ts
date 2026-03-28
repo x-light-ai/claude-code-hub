@@ -195,6 +195,8 @@ function stripKeySecret(key: Key): Omit<Key, "key"> {
 function resolveKeyCacheTtlSeconds(key: Key): number {
   const base = getCacheTtlSeconds();
   const expiresAt = parseOptionalDate(key.expiresAt);
+  const hasPendingRelativeExpiry = key.durationDays != null && !(expiresAt instanceof Date);
+  if (hasPendingRelativeExpiry) return 0;
   // expiresAt 存在但无法解析：安全起见不缓存
   if (key.expiresAt != null && !expiresAt) return 0;
   if (!(expiresAt instanceof Date)) return base;
@@ -239,6 +241,10 @@ export async function getCachedActiveKey(keyString: string): Promise<Key | null>
       return null;
     }
     if (hydrated.expiresAt && hydrated.expiresAt.getTime() <= Date.now()) {
+      redis.del(redisKey).catch(() => {});
+      return null;
+    }
+    if (hydrated.durationDays != null && !hydrated.expiresAt) {
       redis.del(redisKey).catch(() => {});
       return null;
     }
