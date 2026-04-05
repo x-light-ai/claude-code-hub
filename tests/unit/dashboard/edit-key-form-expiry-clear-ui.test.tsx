@@ -23,6 +23,8 @@ vi.mock("sonner", () => sonnerMocks);
 
 const keysActionMocks = vi.hoisted(() => ({
   editKey: vi.fn(async () => ({ ok: true })),
+  adjustRelativeKeyExpiry: vi.fn(async () => ({ ok: true })),
+  renewKeyExpiresAt: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@/actions/keys", () => keysActionMocks);
 
@@ -132,6 +134,56 @@ describe("EditKeyForm: 清除 expiresAt 后应携带 expiresAt 字段提交（�
     const [, payload] = call;
 
     expect("expiresAt" in payload).toBe(true);
+
+    unmount();
+  });
+
+  test("已激活相对有效期默认保存时不应调用调整有效期 action", async () => {
+    const messages = loadMessages();
+
+    const { unmount } = render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <Dialog open onOpenChange={() => {}}>
+          <EditKeyForm
+            keyData={{
+              id: 1,
+              name: "k",
+              expiresAt: "2026-01-04T23:59:59.999Z",
+              durationDays: 7,
+            }}
+            user={{
+              id: 10,
+              name: "u",
+              description: "",
+              role: "user",
+              rpm: null,
+              dailyQuota: null,
+              providerGroup: "default",
+              tags: [],
+              dailyResetMode: "fixed",
+              dailyResetTime: "00:00",
+              isEnabled: true,
+              expiresAt: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }}
+            isAdmin
+          />
+        </Dialog>
+      </NextIntlClientProvider>
+    );
+
+    const submit = document.body.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+    expect(submit).toBeTruthy();
+
+    await act(async () => {
+      submit?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(keysActionMocks.editKey).toHaveBeenCalledTimes(1);
+    expect(keysActionMocks.adjustRelativeKeyExpiry).not.toHaveBeenCalled();
+    expect(keysActionMocks.renewKeyExpiresAt).not.toHaveBeenCalled();
 
     unmount();
   });

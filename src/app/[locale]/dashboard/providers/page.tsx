@@ -1,5 +1,6 @@
 import { BarChart3 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { SettingsPageHeader } from "@/app/[locale]/settings/_components/settings-page-header";
 import { AutoSortPriorityDialog } from "@/app/[locale]/settings/providers/_components/auto-sort-priority-dialog";
 import { ProviderManagerLoader } from "@/app/[locale]/settings/providers/_components/provider-manager-loader";
 import { ReclusterVendorsDialog } from "@/app/[locale]/settings/providers/_components/recluster-vendors-dialog";
@@ -8,6 +9,7 @@ import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Link, redirect } from "@/i18n/routing";
 import { getSession } from "@/lib/auth";
+import { getSystemSettings } from "@/repository/system-config";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +30,14 @@ export default async function DashboardProvidersPage({
   // TypeScript: session is guaranteed to be non-null after the redirect check
   const currentUser = session!.user;
 
-  const t = await getTranslations("settings");
+  const [t, systemSettings] = await Promise.all([
+    getTranslations("settings"),
+    getSystemSettings(),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("providers.title")}</h1>
-        <p className="mt-2 text-muted-foreground">{t("providers.description")}</p>
-      </div>
+      <SettingsPageHeader title={t("providers.title")} description={t("providers.description")} />
 
       <Section
         title={t("providers.section.title")}
@@ -54,7 +56,10 @@ export default async function DashboardProvidersPage({
           </>
         }
       >
-        <ProviderManagerLoader currentUser={currentUser} />
+        <ProviderManagerLoader
+          currentUser={currentUser}
+          currencyCode={systemSettings.currencyDisplay}
+        />
       </Section>
     </div>
   );

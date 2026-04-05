@@ -30,10 +30,8 @@ export function MyUsageHeader({ onLogout, keyName, userName }: MyUsageHeaderProp
     <div className="flex items-center justify-between gap-4">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          {/* CUSTOM: 修改标题为 API 管理控制台 */}
-          <h1 className="text-xl font-semibold leading-tight">
-            API 管理控制台
-          </h1>
+          {/* CUSTOM: 修改标题为 AI词元 管理系统 */}
+          <h1 className="text-xl font-semibold leading-tight">AI词元 管理系统</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-1">

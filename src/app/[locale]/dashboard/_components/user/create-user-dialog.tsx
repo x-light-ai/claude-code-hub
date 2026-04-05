@@ -2,7 +2,6 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Loader2, UserPlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -38,7 +37,7 @@ export interface CreateUserDialogProps {
   onSuccess?: () => void;
 }
 
-const CreateUserSchema = UpdateUserSchema.extend({
+const CreateUserSchema = UpdateUserSchema.safeExtend({
   name: z.string().min(1).max(64),
   providerGroup: z.string().max(200).nullable().optional(),
   allowedClients: z.array(z.string().max(64)).max(50).optional().default([]),
@@ -128,7 +127,6 @@ interface GeneratedKeyInfo {
 }
 
 function CreateUserDialogInner({ onOpenChange, onSuccess }: CreateUserDialogProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const t = useTranslations("dashboard.userManagement");
   const tCommon = useTranslations("common");
@@ -221,7 +219,8 @@ function CreateUserDialogInner({ onOpenChange, onSuccess }: CreateUserDialogProp
 
           onSuccess?.();
           queryClient.invalidateQueries({ queryKey: ["users"] });
-          router.refresh();
+          queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+          queryClient.invalidateQueries({ queryKey: ["userTags"] });
         } catch (error) {
           console.error("[CreateUserDialog] submit failed", error);
           toast.error(t("createDialog.saveFailed"));
@@ -403,8 +402,8 @@ function CreateUserDialogInner({ onOpenChange, onSuccess }: CreateUserDialogProp
               cacheTtlPreference: currentKeyDraft.cacheTtlPreference ?? "inherit",
               limit5hUsd: currentKeyDraft.limit5hUsd ?? null,
               limitDailyUsd: currentKeyDraft.limitDailyUsd ?? null,
-              dailyResetMode: currentKeyDraft.dailyResetMode ?? "fixed",
-              dailyResetTime: currentKeyDraft.dailyResetTime ?? "00:00",
+              dailyResetMode: currentUserDraft.dailyResetMode ?? "fixed",
+              dailyResetTime: currentUserDraft.dailyResetTime ?? "00:00",
               limitWeeklyUsd: currentKeyDraft.limitWeeklyUsd ?? null,
               limitMonthlyUsd: currentKeyDraft.limitMonthlyUsd ?? null,
               limitTotalUsd: currentKeyDraft.limitTotalUsd ?? null,

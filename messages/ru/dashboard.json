@@ -1852,7 +1852,9 @@
       "clickToDisableKey": "Нажмите, чтобы отключить ключ",
       "clickToEnableKey": "Нажмите, чтобы включить ключ",
       "operationFailed": "Операция не удалась",
-      "clickToQuickRenew": "Нажмите для быстрого продления"
+      "clickToQuickRenew": "Нажмите для быстрого продления",
+      "relativePending": "Отсчет начнется после первого реального API-запроса",
+      "relativeActivated": "Активировано. Текущее время истечения: {date}"
     },
     "userStatus": {
       "enabled": "Включён",

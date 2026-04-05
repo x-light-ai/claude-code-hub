@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   BarChart3,
@@ -55,6 +56,7 @@ export interface KeyRowItemProps {
     todayTokens: number;
     lastUsedAt: Date | null;
     expiresAt: string;
+    durationDays?: number | null;
     status: "enabled" | "disabled";
     modelStats: Array<{
       model: string;
@@ -117,12 +119,26 @@ function splitGroups(value?: string | null): string[] {
   return parseProviderGroups(value);
 }
 
-function formatExpiry(expiresAt: string | null | undefined, locale: string): string {
+function formatExpiry(
+  expiresAt: string | null | undefined,
+  durationDays: number | null | undefined,
+  locale: string,
+  tKeyStatus: (key: string, values?: Record<string, string | number>) => string
+): string {
+  if (durationDays != null) {
+    if (!expiresAt) return tKeyStatus("relativePending");
+    const date = new Date(expiresAt);
+    if (Number.isNaN(date.getTime())) return tKeyStatus("relativePending");
+    return tKeyStatus("relativeActivated", {
+      date: formatDate(date, "yyyy-MM-dd HH:mm:ss", locale),
+    });
+  }
+
   if (!expiresAt) return "-";
   const date = new Date(expiresAt);
   // 如果解析失败（如"永不过期"等翻译文本），直接返回原文本
   if (Number.isNaN(date.getTime())) return expiresAt;
-  return formatDate(date, "yyyy-MM-dd", locale);
+  return formatDate(date, "yyyy-MM-dd HH:mm:ss", locale);
 }
 
 function getKeyExpiryStatus(
@@ -159,6 +175,7 @@ export function KeyRowItem({
 }: KeyRowItemProps) {
   const locale = useLocale();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [fullKeyDialogOpen, setFullKeyDialogOpen] = useState(false);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
@@ -228,8 +245,7 @@ export function KeyRowItem({
         return;
       }
       toast.success(checked ? tKeyStatus("keyEnabled") : tKeyStatus("keyDisabled"));
-      // 刷新服务端数据
-      router.refresh();
+      queryClient.invalidateQueries({ queryKey: ["users"] });
     } catch (error) {
       // 失败时回滚UI状态
       setLocalStatus(checked ? "disabled" : "enabled");
@@ -268,7 +284,7 @@ export function KeyRowItem({
         return { ok: false };
       }
       toast.success(tKeyRenew("success"));
-      router.refresh();
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       return { ok: true };
     } catch (error) {
       // 失败时回滚UI状态
@@ -485,7 +501,7 @@ export function KeyRowItem({
           setQuickRenewOpen(true);
         }}
       >
-        {formatExpiry(localExpiresAt, locale)}
+        {formatExpiry(localExpiresAt, keyData.durationDays, locale, tKeyStatus)}
       </div>
 
       {/* 操作 */}

@@ -213,9 +213,7 @@ export function UserKeyTableRow({
         return;
       }
       toast.success(tUserStatus("deleteSuccess"));
-      // 使 React Query 缓存失效，确保数据刷新
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      router.refresh();
     });
   };
 
@@ -234,10 +232,7 @@ export function UserKeyTableRow({
         return;
       }
       toast.success(checked ? tUserStatus("userEnabled") : tUserStatus("userDisabled"));
-      // 使 React Query 缓存失效，确保数据刷新
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      // 刷新服务端数据
-      router.refresh();
     } catch (error) {
       // 失败时回滚UI状态
       setLocalIsEnabled(!checked);
@@ -402,8 +397,7 @@ export function UserKeyTableRow({
         {/* 5h 限额 */}
         <div className="px-2 flex items-center justify-center">
           <UserLimitBadge
-            userId={user.id}
-            limitType="5h"
+            usage={user.limitUsage.limit5h.usage}
             limit={limit5h}
             label={translations.columns.limit5h}
             unit={currencySymbol}
@@ -413,8 +407,7 @@ export function UserKeyTableRow({
         {/* 每日限额 */}
         <div className="px-2 flex items-center justify-center">
           <UserLimitBadge
-            userId={user.id}
-            limitType="daily"
+            usage={user.limitUsage.limitDaily.usage}
             limit={limitDaily}
             label={translations.columns.limitDaily}
             unit={currencySymbol}
@@ -424,8 +417,7 @@ export function UserKeyTableRow({
         {/* 周限额 */}
         <div className="px-2 flex items-center justify-center">
           <UserLimitBadge
-            userId={user.id}
-            limitType="weekly"
+            usage={user.limitUsage.limitWeekly.usage}
             limit={limitWeekly}
             label={translations.columns.limitWeekly}
             unit={currencySymbol}
@@ -435,8 +427,7 @@ export function UserKeyTableRow({
         {/* 月限额 */}
         <div className="px-2 flex items-center justify-center">
           <UserLimitBadge
-            userId={user.id}
-            limitType="monthly"
+            usage={user.limitUsage.limitMonthly.usage}
             limit={limitMonthly}
             label={translations.columns.limitMonthly}
             unit={currencySymbol}
@@ -446,8 +437,7 @@ export function UserKeyTableRow({
         {/* 总限额 */}
         <div className="px-2 flex items-center justify-center">
           <UserLimitBadge
-            userId={user.id}
-            limitType="total"
+            usage={user.limitUsage.limitTotal.usage}
             limit={limitTotal}
             label={translations.columns.limitTotal}
             unit={currencySymbol}
@@ -549,6 +539,7 @@ export function UserKeyTableRow({
                     todayTokens: key.todayTokens,
                     lastUsedAt: key.lastUsedAt,
                     expiresAt: key.expiresAt,
+                    durationDays: key.durationDays ?? null,
                     status: key.status,
                     modelStats: key.modelStats,
                   }}
@@ -634,7 +625,6 @@ export function UserKeyTableRow({
               onSuccess={() => {
                 setEditingKeyId(null);
                 queryClient.invalidateQueries({ queryKey: ["users"] });
-                router.refresh();
               }}
             />
           );

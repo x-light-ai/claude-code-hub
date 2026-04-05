@@ -138,6 +138,14 @@ export interface UserKeyDisplay {
 /**
  * 用户显示对象（用于前端组件）
  */
+export interface UserLimitUsageDisplay {
+  limit5h: { usage: number; limit: number | null };
+  limitDaily: { usage: number; limit: number | null };
+  limitWeekly: { usage: number; limit: number | null };
+  limitMonthly: { usage: number; limit: number | null };
+  limitTotal: { usage: number; limit: number | null };
+}
+
 export interface UserDisplay {
   id: number;
   name: string;
@@ -148,6 +156,7 @@ export interface UserDisplay {
   providerGroup?: string | null;
   tags?: string[]; // 用户标签
   keys: UserKeyDisplay[];
+  limitUsage: UserLimitUsageDisplay;
   // User-level quota fields
   limit5hUsd?: number | null;
   limitWeeklyUsd?: number | null;

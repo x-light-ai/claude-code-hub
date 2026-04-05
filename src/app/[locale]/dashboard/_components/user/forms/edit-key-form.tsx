@@ -1,11 +1,11 @@
 "use client";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatInTimeZone } from "date-fns-tz";
 import { Loader2, RotateCcw } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useTimeZone, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { editKey, resetKeyLimitsOnly } from "@/actions/keys";
+import { adjustRelativeKeyExpiry, editKey, renewKeyExpiresAt, resetKeyLimitsOnly } from "@/actions/keys";
 import { getAvailableProviderGroups } from "@/actions/providers";
 import { DatePickerField } from "@/components/form/date-picker-field";
 import { NumberField, TagInputField, TextField } from "@/components/form/form-field";
@@ -64,11 +64,14 @@ interface EditKeyFormProps {
 
 export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditKeyFormProps) {
   const [isPending, startTransition] = useTransition();
+  const [expiryAction, setExpiryAction] = useState<"none" | "extend" | "reduce" | "fixed">("none");
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
+  const [fixedExpiryAt, setFixedExpiryAt] = useState("");
   const [providerGroupSuggestions, setProviderGroupSuggestions] = useState<string[]>([]);
   const [isResettingLimits, setIsResettingLimits] = useState(false);
   const [resetLimitsDialogOpen, setResetLimitsDialogOpen] = useState(false);
   const locale = useLocale();
-  const router = useRouter();
+  const timeZone = useTimeZone() ?? "UTC";
   const queryClient = useQueryClient();
   const t = useTranslations("quota.keys.editKeyForm");
   const tKeyEdit = useTranslations("dashboard.userManagement.keyEditSection.fields");
@@ -101,8 +104,9 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
       }
       toast.success(t("resetLimits.success"));
       setResetLimitsDialogOpen(false);
-      router.refresh();
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+      queryClient.invalidateQueries({ queryKey: ["userTags"] });
     } catch (error) {
       console.error("[EditKeyForm] reset limits only failed", error);
       toast.error(t("resetLimits.error"));
@@ -116,17 +120,21 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
     try {
       const date = new Date(expiresAt);
       if (Number.isNaN(date.getTime())) return "";
-      return date.toISOString().split("T")[0];
+      return formatInTimeZone(date, timeZone, "yyyy-MM-dd HH:mm:ss");
     } catch {
       return "";
     }
   };
 
+  const formattedResolvedExpiresAt = formatExpiresAt(keyData?.expiresAt || "");
+  const hasRelativeDuration = keyData?.durationDays != null;
+  const hasActivatedRelativeExpiry = hasRelativeDuration && Boolean(formattedResolvedExpiresAt);
+
   const form = useZodForm({
     schema: KeyFormSchema,
     defaultValues: {
       name: keyData?.name || "",
-      expiresAt: formatExpiresAt(keyData?.expiresAt || ""),
+      expiresAt: hasRelativeDuration ? "" : formattedResolvedExpiresAt,
       durationDays: keyData?.durationDays ?? null,
       canLoginWebUi: keyData?.canLoginWebUi ?? true,
       providerGroup: keyData?.providerGroup || PROVIDER_GROUP.DEFAULT,
@@ -147,11 +155,8 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
 
       startTransition(async () => {
         try {
-          const res = await editKey(keyData.id, {
+          const basePayload = {
             name: data.name,
-            // 重要：清除到期时间时用空字符串表达，避免 undefined 在 Server Action 序列化时被丢弃
-            expiresAt: data.expiresAt ?? "",
-            durationDays: data.durationDays,
             canLoginWebUi: data.canLoginWebUi,
             cacheTtlPreference: data.cacheTtlPreference,
             limit5hUsd: data.limit5hUsd,
@@ -163,7 +168,50 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
             limitTotalUsd: data.limitTotalUsd,
             limitConcurrentSessions: data.limitConcurrentSessions,
             ...(isAdmin ? { providerGroup: data.providerGroup || PROVIDER_GROUP.DEFAULT } : {}),
-          });
+          };
+
+          let res;
+          if (hasActivatedRelativeExpiry) {
+            res = await editKey(keyData.id, basePayload);
+            if (!res.ok) {
+              const msg = res.errorCode
+                ? getErrorMessage(tErrors, res.errorCode, res.errorParams)
+                : res.error || t("error");
+              toast.error(msg);
+              return;
+            }
+
+            if (expiryAction === "extend" || expiryAction === "reduce") {
+              if (!expiryDays || expiryDays < 1) {
+                toast.error(t("expiryActions.daysRequired"));
+                return;
+              }
+              res = await adjustRelativeKeyExpiry(keyData.id, {
+                mode: expiryAction,
+                days: expiryDays,
+              });
+            } else if (expiryAction === "fixed") {
+              if (!fixedExpiryAt) {
+                toast.error(t("expiryActions.fixedRequired"));
+                return;
+              }
+              res = await renewKeyExpiresAt(keyData.id, {
+                expiresAt: fixedExpiryAt,
+              });
+            }
+          } else {
+            const expiryPayload =
+              data.durationDays != null
+                ? { durationDays: data.durationDays }
+                : {
+                    expiresAt: data.expiresAt ?? "",
+                  };
+            res = await editKey(keyData.id, {
+              ...basePayload,
+              ...expiryPayload,
+            });
+          }
+
           if (!res.ok) {
             const msg = res.errorCode
               ? getErrorMessage(tErrors, res.errorCode, res.errorParams)
@@ -172,10 +220,10 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
             return;
           }
           toast.success(t("success"));
+          queryClient.invalidateQueries({ queryKey: ["users"] });
           queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
           queryClient.invalidateQueries({ queryKey: ["userTags"] });
           onSuccess?.();
-          router.refresh();
         } catch (err) {
           console.error("编辑Key失败:", err);
           toast.error(t("retryError"));
@@ -219,24 +267,110 @@ export function EditKeyForm({ keyData, user, isAdmin = false, onSuccess }: EditK
         {...form.getFieldProps("name")}
       />
 
-      <DatePickerField
-        label={t("expiresAt.label")}
-        placeholder={t("expiresAt.placeholder")}
-        description={t("expiresAt.description")}
-        clearLabel={tCommon("clearDate")}
-        value={String(form.values.expiresAt || "")}
-        onChange={(val) => form.setValue("expiresAt", val)}
-        error={form.getFieldProps("expiresAt").error}
-        touched={form.getFieldProps("expiresAt").touched}
-      />
+      {form.values.durationDays != null ? (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>{t("expiresAt.label")}</Label>
+            <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              {hasActivatedRelativeExpiry
+                ? t("expiresAt.relativeActivated", { date: formattedResolvedExpiresAt })
+                : t("expiresAt.relativePending")}
+            </div>
+          </div>
 
-      <NumberField
-        label={t("durationDays.label")}
-        placeholder={t("durationDays.placeholder")}
-        description={t("durationDays.description")}
-        min={1}
-        {...form.getFieldProps("durationDays")}
-      />
+          {hasActivatedRelativeExpiry ? (
+            <div className="space-y-3 rounded-lg border border-dashed border-border px-4 py-3">
+              <div className="space-y-1">
+                <Label>{t("expiryActions.label")}</Label>
+                <p className="text-xs text-muted-foreground">{t("expiryActions.description")}</p>
+              </div>
+
+              <Select
+                value={expiryAction}
+                onValueChange={(value: "none" | "extend" | "reduce" | "fixed") => {
+                  setExpiryAction(value);
+                  if (value !== "fixed") {
+                    setFixedExpiryAt("");
+                  }
+                  if (value !== "extend" && value !== "reduce") {
+                    setExpiryDays(null);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("expiryActions.options.none")}</SelectItem>
+                  <SelectItem value="extend">{t("expiryActions.options.extend")}</SelectItem>
+                  <SelectItem value="reduce">{t("expiryActions.options.reduce")}</SelectItem>
+                  <SelectItem value="fixed">{t("expiryActions.options.fixed")}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(expiryAction === "extend" || expiryAction === "reduce") && (
+                <NumberField
+                  label={t("expiryActions.daysLabel")}
+                  placeholder={t("expiryActions.daysPlaceholder")}
+                  description={
+                    expiryAction === "extend"
+                      ? t("expiryActions.extendDescription")
+                      : t("expiryActions.reduceDescription")
+                  }
+                  min={1}
+                  value={expiryDays ?? null}
+                  onChange={(val) => setExpiryDays(typeof val === "number" ? val : null)}
+                />
+              )}
+
+              {expiryAction === "fixed" && (
+                <DatePickerField
+                  label={t("expiryActions.fixedLabel")}
+                  placeholder={t("expiryActions.fixedPlaceholder")}
+                  description={t("expiryActions.fixedDescription")}
+                  clearLabel={tCommon("clearDate")}
+                  value={fixedExpiryAt}
+                  onChange={(val) => setFixedExpiryAt(val)}
+                />
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <DatePickerField
+            label={t("expiresAt.label")}
+            placeholder={t("expiresAt.placeholder")}
+            description={t("expiresAt.description")}
+            clearLabel={tCommon("clearDate")}
+            value={String(form.values.expiresAt || "")}
+            onChange={(val) => {
+              form.setValue("expiresAt", val);
+              if (val) {
+                form.setValue("durationDays", null);
+              }
+            }}
+            error={form.getFieldProps("expiresAt").error}
+            touched={form.getFieldProps("expiresAt").touched}
+          />
+
+          <NumberField
+            label={t("durationDays.label")}
+            placeholder={t("durationDays.placeholder")}
+            description={t("durationDays.description")}
+            min={1}
+            value={form.values.durationDays ?? null}
+            onChange={(val) => {
+              form.setValue("durationDays", val);
+              if (val !== null && val !== "") {
+                form.setValue("expiresAt", "");
+              }
+            }}
+            error={form.getFieldProps("durationDays").error}
+            touched={form.getFieldProps("durationDays").touched}
+          />
+        </>
+      )}
 
       {/* Balance Query Page toggle uses inverted logic by design:
           - canLoginWebUi=true means user accesses full WebUI (switch OFF)

@@ -1,15 +1,14 @@
 import { Key, Loader2 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { getSystemSettings } from "@/repository/system-config";
 import { LoginControls, LoginFormClient } from "./login-form-client";
 
 // CUSTOM: 自定义系统名称
-const DEFAULT_SITE_TITLE = "API 管理控制台";
+const DEFAULT_SITE_TITLE = "AI 词元";
 
 export default async function LoginPage() {
-  const [t, settings] = await Promise.all([getTranslations("auth"), getSystemSettings()]);
-  const siteTitle = settings.siteTitle?.trim() || DEFAULT_SITE_TITLE;
+  const [t] = await Promise.all([getTranslations("auth")]);
+  const siteTitle = DEFAULT_SITE_TITLE;
 
   return (
     <div className="relative min-h-[var(--cch-viewport-height,100vh)] overflow-hidden bg-gradient-to-br from-background via-background to-orange-500/5 dark:to-orange-500/10">

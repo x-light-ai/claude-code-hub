@@ -254,7 +254,9 @@
       "expiresAt": {
         "label": "過期時間",
         "placeholder": "選擇過期時間",
-        "description": "留空表示永不過期"
+        "description": "留空表示永不過期",
+        "relativePending": "首次真實 API 請求後開始計時",
+        "relativeActivated": "已啟用，目前到期時間：{date}"
       },
       "durationDays": {
         "label": "相對有效期（天）",

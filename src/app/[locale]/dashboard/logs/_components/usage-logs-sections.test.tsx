@@ -36,6 +36,7 @@ describe("UsageLogsDataSection", () => {
     })) as ReactElement;
 
     expect(element.props).toMatchObject({
+      siteTitle: undefined,
       billingModelSource: "redirected",
       currencyCode: "CNY",
     });
@@ -55,6 +56,7 @@ describe("UsageLogsDataSection", () => {
     })) as ReactElement;
 
     expect(element.props).toMatchObject({
+      siteTitle: undefined,
       billingModelSource: "original",
       currencyCode: "USD",
       isAdmin: false,

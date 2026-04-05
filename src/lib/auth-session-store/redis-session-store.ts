@@ -7,8 +7,12 @@ import { DEFAULT_SESSION_TTL, type SessionData, type SessionStore } from "./inde
 
 const SESSION_KEY_PREFIX = "cch:session:";
 const MIN_TTL_SECONDS = 1;
+const REDIS_READY_WAIT_TIMEOUT_MS = 3_000;
 
-type RedisSessionClient = Pick<Redis, "status" | "setex" | "get" | "del">;
+type RedisSessionClient = Pick<
+  Redis,
+  "status" | "setex" | "get" | "del" | "once" | "off"
+>;
 
 export interface RedisSessionStoreOptions {
   defaultTtlSeconds?: number;
@@ -88,13 +92,52 @@ export class RedisSessionStore implements SessionStore {
     return getRedisClient({ allowWhenRateLimitDisabled: true }) as RedisSessionClient | null;
   }
 
-  private getReadyRedis(): RedisSessionClient | null {
+  private async getReadyRedis(waitForReady = false): Promise<RedisSessionClient | null> {
     const redis = this.resolveRedisClient();
-    if (!redis || redis.status !== "ready") {
+    if (!redis) {
       return null;
     }
 
-    return redis;
+    if (redis.status === "ready") {
+      return redis;
+    }
+
+    if (!waitForReady) {
+      return null;
+    }
+
+    if (redis.status === "end") {
+      return null;
+    }
+
+    return await new Promise<RedisSessionClient | null>((resolve) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = () => {
+        redis.off("ready", onReady);
+        redis.off("error", onError);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+
+      const finish = (client: RedisSessionClient | null) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(client);
+      };
+
+      const onReady = () => finish(redis);
+      const onError = () => finish(null);
+
+      redis.once("ready", onReady);
+      redis.once("error", onError);
+
+      timeoutId = setTimeout(() => finish(redis.status === "ready" ? redis : null), REDIS_READY_WAIT_TIMEOUT_MS);
+    });
   }
 
   async create(
@@ -112,7 +155,7 @@ export class RedisSessionStore implements SessionStore {
       expiresAt: createdAt + ttl * 1000,
     };
 
-    const redis = this.getReadyRedis();
+    const redis = await this.getReadyRedis(true);
     if (!redis) {
       throw new Error("Redis not ready: session not persisted");
     }
@@ -131,7 +174,7 @@ export class RedisSessionStore implements SessionStore {
   }
 
   async read(sessionId: string): Promise<SessionData | null> {
-    const redis = this.getReadyRedis();
+    const redis = await this.getReadyRedis();
     if (!redis) {
       return null;
     }
@@ -159,7 +202,7 @@ export class RedisSessionStore implements SessionStore {
   }
 
   async revoke(sessionId: string): Promise<boolean> {
-    const redis = this.getReadyRedis();
+    const redis = await this.getReadyRedis();
     if (!redis) {
       logger.warn("[AuthSessionStore] Redis not ready during revoke", { sessionId });
       return false;

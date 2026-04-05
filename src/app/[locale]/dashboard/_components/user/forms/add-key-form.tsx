@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -34,7 +34,7 @@ interface AddKeyFormProps {
 export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyFormProps) {
   const [isPending, startTransition] = useTransition();
   const [providerGroupSuggestions, setProviderGroupSuggestions] = useState<string[]>([]);
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const t = useTranslations("dashboard.addKeyForm");
   const tBalancePage = useTranslations(
     "dashboard.userManagement.keyEditSection.fields.balanceQueryPage"
@@ -79,9 +79,12 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
         const result = await addKey({
           userId: userId!,
           name: data.name,
-          // 重要：清除到期时间时用空字符串表达，避免 undefined 在 Server Action 序列化时被丢弃
-          expiresAt: data.expiresAt ?? "",
-          durationDays: data.durationDays,
+          ...(data.durationDays != null
+            ? { durationDays: data.durationDays }
+            : {
+                // 重要：清除到期时间时用空字符串表达，避免 undefined 在 Server Action 序列化时被丢弃
+                expiresAt: data.expiresAt ?? "",
+              }),
           canLoginWebUi: data.canLoginWebUi,
           limit5hUsd: data.limit5hUsd,
           limitDailyUsd: data.limitDailyUsd,
@@ -110,11 +113,13 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
         }
 
         startTransition(() => {
+          queryClient.invalidateQueries({ queryKey: ["users"] });
+          queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+          queryClient.invalidateQueries({ queryKey: ["userTags"] });
           onSuccess?.({
             generatedKey: payload.generatedKey,
             name: payload.name,
           });
-          router.refresh();
         });
       } catch (err) {
         console.error("添加Key失败:", err);
@@ -166,7 +171,12 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
         description={t("expiresAt.description")}
         clearLabel={tCommon("clearDate")}
         value={String(form.values.expiresAt || "")}
-        onChange={(val) => form.setValue("expiresAt", val)}
+        onChange={(val) => {
+          form.setValue("expiresAt", val);
+          if (val) {
+            form.setValue("durationDays", null);
+          }
+        }}
         error={form.getFieldProps("expiresAt").error}
         touched={form.getFieldProps("expiresAt").touched}
       />
@@ -176,7 +186,15 @@ export function AddKeyForm({ userId, user, isAdmin = false, onSuccess }: AddKeyF
         placeholder={t("durationDays.placeholder")}
         description={t("durationDays.description")}
         min={1}
-        {...form.getFieldProps("durationDays")}
+        value={form.values.durationDays ?? null}
+        onChange={(val) => {
+          form.setValue("durationDays", val);
+          if (val !== null && val !== "") {
+            form.setValue("expiresAt", "");
+          }
+        }}
+        error={form.getFieldProps("durationDays").error}
+        touched={form.getFieldProps("durationDays").touched}
       />
 
       {/* Balance Query Page toggle uses inverted logic by design:

@@ -595,6 +595,9 @@ run("用户和 Key 管理 - 完整 E2E 测试", () => {
       // Step 4: 删除用户（会自动删除所有 Keys）
       await expectSuccess("users", "removeUser", { userId });
 
+      const keysAfterDelete = await expectSuccess("keys", "getKeys", { userId });
+      expect(keysAfterDelete).toHaveLength(0);
+
       console.log(`   Step 4: 删除用户及所有 Keys ✅`);
       console.log(`   ✅ 多Key流程测试通过`);
     });

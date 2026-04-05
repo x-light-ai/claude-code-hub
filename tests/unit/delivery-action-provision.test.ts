@@ -23,10 +23,12 @@ vi.mock("@/lib/utils/zod-i18n", () => ({
 const createKeyMock = vi.fn();
 const deleteKeyMock = vi.fn();
 const findKeyListMock = vi.fn();
+const updateKeyMock = vi.fn();
 vi.mock("@/repository/key", () => ({
   createKey: createKeyMock,
   deleteKey: deleteKeyMock,
   findKeyList: findKeyListMock,
+  updateKey: updateKeyMock,
 }));
 
 const createUserMock = vi.fn();
@@ -49,6 +51,7 @@ describe("delivery action provision", () => {
     createKeyMock.mockReset();
     deleteKeyMock.mockReset();
     findKeyListMock.mockReset();
+    updateKeyMock.mockReset();
     createUserMock.mockReset();
     findUserByNameMock.mockReset();
     updateUserMock.mockReset();
@@ -70,6 +73,18 @@ describe("delivery action provision", () => {
     expect(result).toEqual({ ok: false, error: "需要管理员权限" });
   });
 
+  test("returns validation error for missing expiry strategy", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+
+    const { provision } = await import("@/actions/delivery");
+    const result = await provision({
+      username: "alice",
+    });
+
+    expect(formatZodErrorMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: false, error: "参数错误" });
+  });
+
   test("returns validation error for invalid payload", async () => {
     getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
 
@@ -77,6 +92,20 @@ describe("delivery action provision", () => {
     const result = await provision({
       username: "",
       expiresAt: "",
+    });
+
+    expect(formatZodErrorMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: false, error: "参数错误" });
+  });
+
+  test("returns validation error when both expiry strategies are provided", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+
+    const { provision } = await import("@/actions/delivery");
+    const result = await provision({
+      username: "alice",
+      expiresAt: "2026-12-31 23:59:59",
+      durationDays: 30,
     });
 
     expect(formatZodErrorMock).toHaveBeenCalledTimes(1);
@@ -107,6 +136,8 @@ describe("delivery action provision", () => {
       description: "发货系统自动创建",
       dailyQuota: 10,
       limitConcurrentSessions: 2,
+      dailyResetMode: "rolling",
+      dailyResetTime: undefined,
       expiresAt: expiresAtDate,
     });
     expect(createKeyMock).toHaveBeenCalledTimes(1);
@@ -115,6 +146,7 @@ describe("delivery action provision", () => {
       expect(result.data.userId).toBe(101);
       expect(result.data.username).toBe("alice");
       expect(result.data.expiresAt).toBe(expiresAtDate.toISOString());
+      expect(result.data.durationDays).toBeNull();
       expect(result.data.isNewUser).toBe(true);
       expect(result.data.isNewKey).toBe(true);
       expect(result.data.apiKey).toMatch(/^sk-[0-9a-f]{32}$/);
@@ -124,6 +156,7 @@ describe("delivery action provision", () => {
         name: "发货系统生成",
         is_enabled: true,
         expires_at: expiresAtDate,
+        duration_days: null,
       });
     }
   });
@@ -144,7 +177,13 @@ describe("delivery action provision", () => {
     expect(updateUserMock).toHaveBeenCalledWith(55, {
       dailyQuota: 20,
       limitConcurrentSessions: 3,
+      dailyResetMode: "rolling",
+      dailyResetTime: undefined,
       expiresAt: expiresAtDate,
+    });
+    expect(updateKeyMock).toHaveBeenCalledWith(9, {
+      expires_at: expiresAtDate,
+      duration_days: null,
     });
     expect(createUserMock).not.toHaveBeenCalled();
     expect(createKeyMock).not.toHaveBeenCalled();
@@ -156,8 +195,54 @@ describe("delivery action provision", () => {
         userId: 55,
         username: "bob",
         expiresAt: expiresAtDate.toISOString(),
+        durationDays: null,
         isNewUser: false,
         isNewKey: false,
+      },
+    });
+  });
+
+  test("creates new user and key with relative expiry", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+    findUserByNameMock.mockResolvedValue(null);
+    createUserMock.mockResolvedValue({ id: 202, name: "dave" });
+    findKeyListMock.mockResolvedValue([]);
+
+    const { provision } = await import("@/actions/delivery");
+    const result = await provision({
+      username: "dave",
+      durationDays: 30,
+      dailyLimitUsd: 15,
+    });
+
+    expect(parseDateInputAsTimezoneMock).not.toHaveBeenCalled();
+    expect(createUserMock).toHaveBeenCalledWith({
+      name: "dave",
+      description: "发货系统自动创建",
+      dailyQuota: 15,
+      limitConcurrentSessions: undefined,
+      dailyResetMode: "rolling",
+      dailyResetTime: undefined,
+      expiresAt: undefined,
+    });
+    expect(createKeyMock).toHaveBeenCalledWith({
+      user_id: 202,
+      key: expect.stringMatching(/^sk-[0-9a-f]{32}$/),
+      name: "发货系统生成",
+      is_enabled: true,
+      expires_at: null,
+      duration_days: 30,
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        apiKey: expect.stringMatching(/^sk-[0-9a-f]{32}$/),
+        userId: 202,
+        username: "dave",
+        expiresAt: null,
+        durationDays: 30,
+        isNewUser: true,
+        isNewKey: true,
       },
     });
   });
@@ -178,14 +263,90 @@ describe("delivery action provision", () => {
     expect(deleteKeyMock).toHaveBeenNthCalledWith(1, 1);
     expect(deleteKeyMock).toHaveBeenNthCalledWith(2, 2);
     expect(createKeyMock).toHaveBeenCalledTimes(1);
+    expect(createKeyMock).toHaveBeenCalledWith({
+      user_id: 77,
+      key: expect.stringMatching(/^sk-[0-9a-f]{32}$/),
+      name: "发货系统生成",
+      is_enabled: true,
+      expires_at: expiresAtDate,
+      duration_days: null,
+    });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.userId).toBe(77);
       expect(result.data.username).toBe("carol");
+      expect(result.data.expiresAt).toBe(expiresAtDate.toISOString());
+      expect(result.data.durationDays).toBeNull();
       expect(result.data.isNewUser).toBe(false);
       expect(result.data.isNewKey).toBe(true);
       expect(result.data.apiKey).toMatch(/^sk-[0-9a-f]{32}$/);
     }
+  });
+
+  test("updates existing key with relative expiry by default", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+    findUserByNameMock.mockResolvedValue({ id: 88, name: "erin" });
+    findKeyListMock.mockResolvedValue([{ id: 11, key: "sk-relative" }]);
+
+    const { provision } = await import("@/actions/delivery");
+    const result = await provision({
+      username: "erin",
+      durationDays: 7,
+      regenerateKey: false,
+    });
+
+    expect(parseDateInputAsTimezoneMock).not.toHaveBeenCalled();
+    expect(updateKeyMock).toHaveBeenCalledWith(11, {
+      expires_at: null,
+      duration_days: 7,
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        apiKey: "sk-relative",
+        userId: 88,
+        username: "erin",
+        expiresAt: null,
+        durationDays: 7,
+        isNewUser: false,
+        isNewKey: false,
+      },
+    });
+  });
+
+  test("regenerates key with relative expiry", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
+    findUserByNameMock.mockResolvedValue({ id: 99, name: "frank" });
+    findKeyListMock.mockResolvedValue([{ id: 21, key: "sk-old" }]);
+
+    const { provision } = await import("@/actions/delivery");
+    const result = await provision({
+      username: "frank",
+      durationDays: 14,
+      regenerateKey: true,
+    });
+
+    expect(deleteKeyMock).toHaveBeenCalledWith(21);
+    expect(createKeyMock).toHaveBeenCalledWith({
+      user_id: 99,
+      key: expect.stringMatching(/^sk-[0-9a-f]{32}$/),
+      name: "发货系统生成",
+      is_enabled: true,
+      expires_at: null,
+      duration_days: 14,
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        apiKey: expect.stringMatching(/^sk-[0-9a-f]{32}$/),
+        userId: 99,
+        username: "frank",
+        expiresAt: null,
+        durationDays: 14,
+        isNewUser: false,
+        isNewKey: true,
+      },
+    });
   });
 
   test("returns thrown error message", async () => {

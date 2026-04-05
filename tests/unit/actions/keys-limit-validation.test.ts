@@ -85,6 +85,7 @@ describe("keys limit validation", () => {
       name: "k",
       isEnabled: true,
       expiresAt: null,
+      durationDays: null,
       canLoginWebUi: true,
       limit5hUsd: null,
       limitDailyUsd: null,
@@ -149,5 +150,41 @@ describe("keys limit validation", () => {
       expect(result.error).toBe("KEY_LIMIT_CONCURRENT_EXCEEDS_USER_LIMIT");
     }
     expect(updateKeyMock).not.toHaveBeenCalled();
+  });
+
+  it("addKey：携带相对有效期时应透传 duration_days", async () => {
+    const { addKey } = await import("@/actions/keys");
+
+    const result = await addKey({
+      userId: 10,
+      name: "k-relative",
+      durationDays: 1,
+      providerGroup: "default",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(createKeyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        duration_days: 1,
+      })
+    );
+  });
+
+  it("editKey：携带相对有效期时应透传 duration_days", async () => {
+    const { editKey } = await import("@/actions/keys");
+
+    const result = await editKey(1, {
+      name: "k-relative",
+      durationDays: 1,
+      providerGroup: "default",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(updateKeyMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        duration_days: 1,
+      })
+    );
   });
 });

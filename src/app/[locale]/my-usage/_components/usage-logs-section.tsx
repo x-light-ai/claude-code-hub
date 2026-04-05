@@ -1,12 +1,11 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Filter, Loader2, RefreshCw, ScrollText, X } from "lucide-react";
+import { ChevronDown, Loader2, ScrollText } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getMyAvailableModels, getMyUsageLogsBatch } from "@/actions/my-usage";
 import { LogsDateRangePicker } from "@/app/[locale]/dashboard/logs/_components/logs-date-range-picker";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
@@ -47,7 +46,6 @@ export function UsageLogsSection({
   const [isModelsLoading, setIsModelsLoading] = useState(true);
   const [draftFilters, setDraftFilters] = useState<Filters>({});
   const [appliedFilters, setAppliedFilters] = useState<Filters>({});
-  const [isBrowsingHistory, setIsBrowsingHistory] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -83,13 +81,7 @@ export function UsageLogsSection({
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30000,
     refetchOnWindowFocus: false,
-    refetchInterval: autoRefreshSeconds
-      ? (query) => {
-          if (!isOpen || isBrowsingHistory) return false;
-          if (query.state.fetchStatus !== "idle") return false;
-          return autoRefreshSeconds * 1000;
-        }
-      : false,
+    refetchInterval: false,
   });
   const {
     data,
@@ -99,47 +91,10 @@ export function UsageLogsSection({
     isLoading,
     isError,
     error,
-    isRefetching = false,
   } = query;
 
   const logs = useMemo(() => data?.pages.flatMap((page) => page.logs) ?? [], [data]);
   const latestPage = data?.pages[0];
-
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (appliedFilters.startDate || appliedFilters.endDate) count++;
-    if (appliedFilters.model) count++;
-    return count;
-  }, [appliedFilters]);
-
-  const lastLog = logs[0] ?? null;
-
-  const lastStatusText = useMemo(() => {
-    if (!lastLog?.createdAt) return null;
-    const now = new Date();
-    const logTime = new Date(lastLog.createdAt);
-    const diffMs = now.getTime() - logTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-
-    if (diffMins < 1) return "now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${Math.floor(diffHours / 24)}d ago`;
-  }, [lastLog]);
-
-  const successRate = useMemo(() => {
-    if (logs.length === 0) return null;
-    const successCount = logs.filter((log) => log.statusCode && log.statusCode < 400).length;
-    return Math.round((successCount / logs.length) * 100);
-  }, [logs]);
-
-  const lastStatusColor = useMemo(() => {
-    if (!lastLog?.statusCode) return "";
-    if (lastLog.statusCode === 200) return "text-green-600 dark:text-green-400";
-    if (lastLog.statusCode >= 400) return "text-red-600 dark:text-red-400";
-    return "";
-  }, [lastLog]);
 
   const handleFilterChange = (changes: Partial<Filters>) => {
     setDraftFilters((prev) => ({ ...prev, ...changes }));
@@ -169,7 +124,6 @@ export function UsageLogsSection({
     void fetchNextPage();
   }, [fetchNextPage]);
 
-  const isRefreshing = isRefetching && !isFetchingNextPage && logs.length > 0;
   const errorMessage = isError ? (error instanceof Error ? error.message : t("loadFailed")) : null;
 
   return (
@@ -190,158 +144,71 @@ export function UsageLogsSection({
               <span className="text-sm font-semibold">{tCollapsible("title")}</span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 text-sm">
-                {lastLog ? (
-                  <span className={cn("font-mono", lastStatusColor)}>
-                    {tCollapsible("lastStatus", {
-                      code: lastLog.statusCode ?? "-",
-                      time: lastStatusText ?? "-",
-                    })}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">{tCollapsible("noData")}</span>
-                )}
-
-                <span className="text-muted-foreground">|</span>
-
-                {successRate !== null ? (
-                  <span
-                    className={cn(
-                      "flex items-center gap-1",
-                      successRate >= 80
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
-                    )}
-                  >
-                    {successRate >= 80 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                    {tCollapsible("successRate", { rate: successRate })}
-                  </span>
-                ) : null}
-
-                {activeFiltersCount > 0 && (
-                  <>
-                    <span className="text-muted-foreground">|</span>
-                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                      <Filter className="h-3 w-3 mr-1" />
-                      {activeFiltersCount}
-                    </Badge>
-                  </>
-                )}
-
-                {autoRefreshSeconds && (
-                  <>
-                    <span className="text-muted-foreground">|</span>
-                    <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
-                    <span className="text-xs text-muted-foreground">{autoRefreshSeconds}s</span>
-                  </>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs sm:hidden">
-                {lastLog ? (
-                  <span className={cn("font-mono", lastStatusColor)}>
-                    {lastLog.statusCode ?? "-"} ({lastStatusText ?? "-"})
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">{tCollapsible("noData")}</span>
-                )}
-
-                <span className="text-muted-foreground">|</span>
-
-                {successRate !== null ? (
-                  <span
-                    className={cn(
-                      "flex items-center gap-0.5",
-                      successRate >= 80 ? "text-green-600" : "text-red-600"
-                    )}
-                  >
-                    {successRate >= 80 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                    {successRate}%
-                  </span>
-                ) : null}
-
-                {activeFiltersCount > 0 && (
-                  <>
-                    <span className="text-muted-foreground">|</span>
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                      {activeFiltersCount}
-                    </Badge>
-                  </>
-                )}
-                {autoRefreshSeconds && (
-                  <>
-                    <span className="text-muted-foreground">|</span>
-                    <RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} />
-                  </>
-                )}
-              </div>
-
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 text-muted-foreground transition-transform duration-200",
-                  isOpen && "rotate-180"
-                )}
-              />
-            </div>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                isOpen && "rotate-180"
+              )}
+            />
           </button>
         </CollapsibleTrigger>
 
         <CollapsibleContent>
           <div className="p-4 space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-12">
-              <div className="space-y-1.5 lg:col-span-6">
-                <Label>
-                  {t("filters.startDate")} / {t("filters.endDate")}
-                </Label>
-                <LogsDateRangePicker
-                  startDate={draftFilters.startDate}
-                  endDate={draftFilters.endDate}
-                  onDateRangeChange={handleDateRangeChange}
-                  serverTimeZone={serverTimeZone}
-                />
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>
+                    {t("filters.startDate")} / {t("filters.endDate")}
+                  </Label>
+                  <LogsDateRangePicker
+                    startDate={draftFilters.startDate}
+                    endDate={draftFilters.endDate}
+                    onDateRangeChange={handleDateRangeChange}
+                    serverTimeZone={serverTimeZone}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t("filters.model")}</Label>
+                  <Select
+                    value={draftFilters.model ?? "__all__"}
+                    onValueChange={(value) =>
+                      handleFilterChange({ model: value === "__all__" ? undefined : value })
+                    }
+                    disabled={isModelsLoading}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={isModelsLoading ? tCommon("loading") : t("filters.allModels")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">{t("filters.allModels")}</SelectItem>
+                      {models.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-1.5 lg:col-span-6">
-                <Label>{t("filters.model")}</Label>
-                <Select
-                  value={draftFilters.model ?? "__all__"}
-                  onValueChange={(value) =>
-                    handleFilterChange({ model: value === "__all__" ? undefined : value })
-                  }
-                  disabled={isModelsLoading}
+
+              <div className="flex items-end gap-2 lg:shrink-0">
+                <Button size="sm" onClick={handleApply} disabled={isLoading} className="min-w-20">
+                  查询
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReset}
+                  disabled={isLoading}
+                  className="min-w-20"
                 >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={isModelsLoading ? tCommon("loading") : t("filters.allModels")}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("filters.allModels")}</SelectItem>
-                    {models.map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {t("filters.reset")}
+                </Button>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={handleApply} disabled={isLoading}>
-                {t("filters.apply")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleReset} disabled={isLoading}>
-                {t("filters.reset")}
-              </Button>
-            </div>
-
-            {isRefreshing ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>{tCommon("loading")}</span>
-              </div>
-            ) : null}
 
             <UsageLogsTable
               logs={logs}
@@ -353,7 +220,6 @@ export function UsageLogsSection({
               errorMessage={errorMessage}
               onLoadMore={handleLoadMore}
               resetScrollKey={appliedFilters}
-              onHistoryBrowsingChange={setIsBrowsingHistory}
             />
           </div>
         </CollapsibleContent>

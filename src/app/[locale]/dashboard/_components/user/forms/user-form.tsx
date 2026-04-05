@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,14 @@ import { DatePickerField } from "@/components/form/date-picker-field";
 import { ArrayTagInputField, TagInputField, TextField } from "@/components/form/form-field";
 import { DialogFormLayout, FormGrid } from "@/components/form/form-layout";
 import { InlineWarning } from "@/components/ui/inline-warning";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PROVIDER_GROUP } from "@/lib/constants/provider.constants";
 import { USER_LIMITS } from "@/lib/constants/user.constants";
@@ -17,13 +25,23 @@ import { useZodForm } from "@/lib/hooks/use-zod-form";
 import { formatDateToLocalYmd, parseYmdToLocalEndOfDay } from "@/lib/utils/date-input";
 import { getErrorMessage } from "@/lib/utils/error-messages";
 import { setZodErrorMap } from "@/lib/utils/zod-i18n";
-import { CreateUserSchema } from "@/lib/validation/schemas";
+import { CreateUserSchemaBase } from "@/lib/validation/schemas";
 import { AccessRestrictionsSection } from "./access-restrictions-section";
 
 // 前端表单使用的 schema（接受字符串日期）
-const UserFormSchema = CreateUserSchema.extend({
-  expiresAt: z.string().optional(),
-});
+const UserFormSchema = CreateUserSchemaBase.omit({ expiresAt: true })
+  .extend({
+    expiresAt: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "固定时间重置模式必须填写重置时间",
+        path: ["dailyResetTime"],
+      });
+    }
+  });
 
 interface UserFormProps {
   user?: {
@@ -39,6 +57,8 @@ interface UserFormProps {
     limitMonthlyUsd?: number | null;
     limitTotalUsd?: number | null;
     limitConcurrentSessions?: number | null;
+    dailyResetMode?: "fixed" | "rolling";
+    dailyResetTime?: string;
     isEnabled?: boolean;
     expiresAt?: Date | null;
     allowedClients?: string[];
@@ -54,7 +74,7 @@ interface UserFormProps {
 export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
   const [isPending, startTransition] = useTransition();
   const [providerGroupSuggestions, setProviderGroupSuggestions] = useState<string[]>([]);
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const isEdit = Boolean(user?.id);
   const isAdmin = currentUser?.role === "admin";
 
@@ -92,6 +112,8 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
       limitMonthlyUsd: user?.limitMonthlyUsd ?? null,
       limitTotalUsd: user?.limitTotalUsd ?? null,
       limitConcurrentSessions: user?.limitConcurrentSessions ?? null,
+      dailyResetMode: user?.dailyResetMode ?? "fixed",
+      dailyResetTime: user?.dailyResetTime ?? "00:00",
       isEnabled: user?.isEnabled ?? true,
       expiresAt: user?.expiresAt ? formatDateToLocalYmd(user.expiresAt) : "",
       allowedClients: user?.allowedClients || [],
@@ -121,6 +143,8 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
               limitMonthlyUsd: data.limitMonthlyUsd,
               limitTotalUsd: data.limitTotalUsd,
               limitConcurrentSessions: data.limitConcurrentSessions,
+              dailyResetMode: data.dailyResetMode,
+              dailyResetTime: data.dailyResetMode === "fixed" ? data.dailyResetTime : undefined,
               isEnabled: data.isEnabled,
               expiresAt,
               allowedClients: data.allowedClients,
@@ -140,6 +164,8 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
               limitMonthlyUsd: data.limitMonthlyUsd,
               limitTotalUsd: data.limitTotalUsd,
               limitConcurrentSessions: data.limitConcurrentSessions,
+              dailyResetMode: data.dailyResetMode,
+              dailyResetTime: data.dailyResetMode === "fixed" ? data.dailyResetTime : undefined,
               isEnabled: data.isEnabled,
               expiresAt,
               allowedClients: data.allowedClients,
@@ -160,7 +186,9 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
           // Show success notification
           toast.success(tNotifications(isEdit ? "user_updated" : "user_created"));
           onSuccess?.();
-          router.refresh();
+          queryClient.invalidateQueries({ queryKey: ["users"] });
+          queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+          queryClient.invalidateQueries({ queryKey: ["userTags"] });
         } catch (err) {
           console.error(`${isEdit ? "编辑" : "添加"}用户失败:`, err);
           toast.error(tNotifications(isEdit ? "update_failed" : "create_failed"));
@@ -279,57 +307,94 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
 
       {/* Admin-only quota fields */}
       {isAdmin && (
-        <FormGrid columns={2}>
-          <TextField
-            label={tForm("limit5hUsd.label")}
-            type="number"
-            min={0}
-            max={10000}
-            step={0.01}
-            placeholder={tForm("limit5hUsd.placeholder")}
-            {...form.getFieldProps("limit5hUsd")}
-          />
+        <>
+          <FormGrid columns={2}>
+            <TextField
+              label={tForm("limit5hUsd.label")}
+              type="number"
+              min={0}
+              max={10000}
+              step={0.01}
+              placeholder={tForm("limit5hUsd.placeholder")}
+              {...form.getFieldProps("limit5hUsd")}
+            />
 
-          <TextField
-            label={tForm("limitWeeklyUsd.label")}
-            type="number"
-            min={0}
-            max={50000}
-            step={0.01}
-            placeholder={tForm("limitWeeklyUsd.placeholder")}
-            {...form.getFieldProps("limitWeeklyUsd")}
-          />
+            <TextField
+              label={tForm("limitWeeklyUsd.label")}
+              type="number"
+              min={0}
+              max={50000}
+              step={0.01}
+              placeholder={tForm("limitWeeklyUsd.placeholder")}
+              {...form.getFieldProps("limitWeeklyUsd")}
+            />
 
-          <TextField
-            label={tForm("limitMonthlyUsd.label")}
-            type="number"
-            min={0}
-            max={200000}
-            step={0.01}
-            placeholder={tForm("limitMonthlyUsd.placeholder")}
-            {...form.getFieldProps("limitMonthlyUsd")}
-          />
+            <TextField
+              label={tForm("limitMonthlyUsd.label")}
+              type="number"
+              min={0}
+              max={200000}
+              step={0.01}
+              placeholder={tForm("limitMonthlyUsd.placeholder")}
+              {...form.getFieldProps("limitMonthlyUsd")}
+            />
 
-          <TextField
-            label={tForm("limitTotalUsd.label")}
-            type="number"
-            min={0}
-            max={10000000}
-            step={0.01}
-            placeholder={tForm("limitTotalUsd.placeholder")}
-            {...form.getFieldProps("limitTotalUsd")}
-          />
+            <TextField
+              label={tForm("limitTotalUsd.label")}
+              type="number"
+              min={0}
+              max={10000000}
+              step={0.01}
+              placeholder={tForm("limitTotalUsd.placeholder")}
+              {...form.getFieldProps("limitTotalUsd")}
+            />
 
-          <TextField
-            label={tForm("limitConcurrentSessions.label")}
-            type="number"
-            min={0}
-            max={1000}
-            step={1}
-            placeholder={tForm("limitConcurrentSessions.placeholder")}
-            {...form.getFieldProps("limitConcurrentSessions")}
-          />
-        </FormGrid>
+            <TextField
+              label={tForm("limitConcurrentSessions.label")}
+              type="number"
+              min={0}
+              max={1000}
+              step={1}
+              placeholder={tForm("limitConcurrentSessions.placeholder")}
+              {...form.getFieldProps("limitConcurrentSessions")}
+            />
+          </FormGrid>
+
+          <FormGrid columns={2}>
+            <div className="space-y-2">
+              <Label htmlFor="daily-reset-mode">{tForm("dailyResetMode.label")}</Label>
+              <Select
+                value={form.values.dailyResetMode}
+                onValueChange={(value: "fixed" | "rolling") => form.setValue("dailyResetMode", value)}
+                disabled={isPending}
+              >
+                <SelectTrigger id="daily-reset-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">{tForm("dailyResetMode.options.fixed")}</SelectItem>
+                  <SelectItem value="rolling">{tForm("dailyResetMode.options.rolling")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {form.values.dailyResetMode === "fixed"
+                  ? tForm("dailyResetMode.desc.fixed")
+                  : tForm("dailyResetMode.desc.rolling")}
+              </p>
+            </div>
+
+            {form.values.dailyResetMode === "fixed" && (
+              <TextField
+                label={tForm("dailyResetTime.label")}
+                placeholder={tForm("dailyResetTime.placeholder")}
+                description={tForm("dailyResetTime.description")}
+                type="time"
+                step={60}
+                {...form.getFieldProps("dailyResetTime")}
+              />
+            )}
+          </FormGrid>
+        </>
       )}
 
       {/* Admin-only user status fields */}

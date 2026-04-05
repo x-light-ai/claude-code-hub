@@ -20,6 +20,7 @@ import { formatZodError } from "@/lib/utils/zod-i18n";
 import { CreateUserSchema, UpdateUserSchema } from "@/lib/validation/schemas";
 import {
   createKey,
+  deleteKeysByUserId,
   findKeyList,
   findKeyListBatch,
   findKeysStatisticsBatchFromKeys,
@@ -36,7 +37,7 @@ import {
   searchUsersForFilter as searchUsersForFilterRepository,
   updateUser,
 } from "@/repository/user";
-import type { User, UserDisplay } from "@/types/user";
+import type { User, UserDisplay, UserLimitUsageDisplay } from "@/types/user";
 import type { ActionResult } from "./types";
 
 /**
@@ -215,6 +216,72 @@ export interface GetUsersUsageBatchResult {
   usageByKeyId: Record<number, KeyUsageData>;
 }
 
+function buildDefaultUserLimitUsage(user: Pick<
+  User,
+  "limit5hUsd" | "dailyQuota" | "limitWeeklyUsd" | "limitMonthlyUsd" | "limitTotalUsd"
+>): UserLimitUsageDisplay {
+  return {
+    limit5h: { usage: 0, limit: user.limit5hUsd ?? null },
+    limitDaily: { usage: 0, limit: user.dailyQuota ?? null },
+    limitWeekly: { usage: 0, limit: user.limitWeeklyUsd ?? null },
+    limitMonthly: { usage: 0, limit: user.limitMonthlyUsd ?? null },
+    limitTotal: { usage: 0, limit: user.limitTotalUsd ?? null },
+  };
+}
+
+async function getUsersLimitUsageBatch(users: User[]): Promise<Map<number, UserLimitUsageDisplay>> {
+  const result = new Map<number, UserLimitUsageDisplay>();
+  if (users.length === 0) return result;
+
+  const { getTimeRangeForPeriod, getTimeRangeForPeriodWithMode } = await import(
+    "@/lib/rate-limit/time-utils"
+  );
+  const { sumUserCostInTimeRange, sumUserTotalCost } = await import("@/repository/statistics");
+
+  const [range5h, rangeWeekly, rangeMonthly] = await Promise.all([
+    getTimeRangeForPeriod("5h"),
+    getTimeRangeForPeriod("weekly"),
+    getTimeRangeForPeriod("monthly"),
+  ]);
+
+  const usageEntries = await Promise.all(
+    users.map(async (user) => {
+      const rangeDaily = await getTimeRangeForPeriodWithMode(
+        "daily",
+        user.dailyResetTime || "00:00",
+        (user.dailyResetMode || "fixed") as "fixed" | "rolling"
+      );
+      const clipStart = (start: Date): Date =>
+        user.costResetAt instanceof Date && user.costResetAt > start ? user.costResetAt : start;
+
+      const [usage5h, usageDaily, usageWeekly, usageMonthly, usageTotal] = await Promise.all([
+        sumUserCostInTimeRange(user.id, clipStart(range5h.startTime), range5h.endTime),
+        sumUserCostInTimeRange(user.id, clipStart(rangeDaily.startTime), rangeDaily.endTime),
+        sumUserCostInTimeRange(user.id, clipStart(rangeWeekly.startTime), rangeWeekly.endTime),
+        sumUserCostInTimeRange(user.id, clipStart(rangeMonthly.startTime), rangeMonthly.endTime),
+        sumUserTotalCost(user.id, Number.POSITIVE_INFINITY, user.costResetAt ?? null),
+      ]);
+
+      return [
+        user.id,
+        {
+          limit5h: { usage: usage5h, limit: user.limit5hUsd ?? null },
+          limitDaily: { usage: usageDaily, limit: user.dailyQuota ?? null },
+          limitWeekly: { usage: usageWeekly, limit: user.limitWeeklyUsd ?? null },
+          limitMonthly: { usage: usageMonthly, limit: user.limitMonthlyUsd ?? null },
+          limitTotal: { usage: usageTotal, limit: user.limitTotalUsd ?? null },
+        } satisfies UserLimitUsageDisplay,
+      ] as const;
+    })
+  );
+
+  for (const [userId, usage] of usageEntries) {
+    result.set(userId, usage);
+  }
+
+  return result;
+}
+
 /**
  * 批量更新的结果统计（便于前端展示成功/失败数量）。
  */
@@ -367,7 +434,10 @@ export async function getUsers(params?: GetUsersBatchParams): Promise<UserDispla
       findKeyListBatch(userIds),
       findKeyUsageTodayBatch(userIds),
     ]);
-    const statisticsMap = await findKeysStatisticsBatchFromKeys(keysMap);
+    const [statisticsMap, userLimitUsageMap] = await Promise.all([
+      findKeysStatisticsBatchFromKeys(keysMap),
+      getUsersLimitUsageBatch(users),
+    ]);
 
     const userDisplays: UserDisplay[] = users.map((user) => {
       try {
@@ -392,6 +462,7 @@ export async function getUsers(params?: GetUsersBatchParams): Promise<UserDispla
           dailyQuota: user.dailyQuota,
           providerGroup: user.providerGroup || undefined,
           tags: user.tags || [],
+          limitUsage: userLimitUsageMap.get(user.id) ?? buildDefaultUserLimitUsage(user),
           limit5hUsd: user.limit5hUsd ?? null,
           limitWeeklyUsd: user.limitWeeklyUsd ?? null,
           limitMonthlyUsd: user.limitMonthlyUsd ?? null,
@@ -414,9 +485,7 @@ export async function getUsers(params?: GetUsersBatchParams): Promise<UserDispla
               maskedKey: maskKey(key.key),
               fullKey: canUserManageKey ? key.key : undefined,
               canCopy: canUserManageKey,
-              expiresAt: key.expiresAt
-                ? key.expiresAt.toISOString().split("T")[0]
-                : t("neverExpires"),
+              expiresAt: key.expiresAt ? key.expiresAt.toISOString() : t("neverExpires"),
               status: key.isEnabled ? "enabled" : ("disabled" as const),
               createdAt: key.createdAt,
               createdAtFormatted: key.createdAt.toLocaleString(locale, {
@@ -461,6 +530,7 @@ export async function getUsers(params?: GetUsersBatchParams): Promise<UserDispla
           dailyQuota: user.dailyQuota,
           providerGroup: user.providerGroup || undefined,
           tags: user.tags || [],
+          limitUsage: buildDefaultUserLimitUsage(user),
           limit5hUsd: user.limit5hUsd ?? null,
           limitWeeklyUsd: user.limitWeeklyUsd ?? null,
           limitMonthlyUsd: user.limitMonthlyUsd ?? null,
@@ -644,7 +714,10 @@ export async function getUsersBatch(
       findKeyListBatch(userIds),
       findKeyUsageTodayBatch(userIds),
     ]);
-    const statisticsMap = await findKeysStatisticsBatchFromKeys(keysMap);
+    const [statisticsMap, userLimitUsageMap] = await Promise.all([
+      findKeysStatisticsBatchFromKeys(keysMap),
+      getUsersLimitUsageBatch(users),
+    ]);
 
     const userDisplays: UserDisplay[] = users.map((user) => {
       try {
@@ -670,6 +743,7 @@ export async function getUsersBatch(
           dailyQuota: user.dailyQuota,
           providerGroup: user.providerGroup || undefined,
           tags: user.tags || [],
+          limitUsage: userLimitUsageMap.get(user.id) ?? buildDefaultUserLimitUsage(user),
           limit5hUsd: user.limit5hUsd ?? null,
           limitWeeklyUsd: user.limitWeeklyUsd ?? null,
           limitMonthlyUsd: user.limitMonthlyUsd ?? null,
@@ -691,9 +765,7 @@ export async function getUsersBatch(
               maskedKey: maskKey(key.key),
               fullKey: canUserManageKey ? key.key : undefined,
               canCopy: canUserManageKey,
-              expiresAt: key.expiresAt
-                ? key.expiresAt.toISOString().split("T")[0]
-                : t("neverExpires"),
+              expiresAt: key.expiresAt ? key.expiresAt.toISOString() : t("neverExpires"),
               status: key.isEnabled ? "enabled" : ("disabled" as const),
               createdAt: key.createdAt,
               createdAtFormatted: key.createdAt.toLocaleString(locale, {
@@ -736,6 +808,7 @@ export async function getUsersBatch(
           dailyQuota: user.dailyQuota,
           providerGroup: user.providerGroup || undefined,
           tags: user.tags || [],
+          limitUsage: buildDefaultUserLimitUsage(user),
           limit5hUsd: user.limit5hUsd ?? null,
           limitWeeklyUsd: user.limitWeeklyUsd ?? null,
           limitMonthlyUsd: user.limitMonthlyUsd ?? null,
@@ -817,6 +890,7 @@ export async function getUsersBatchCore(
         dailyQuota: user.dailyQuota,
         providerGroup: user.providerGroup || undefined,
         tags: user.tags || [],
+        limitUsage: buildDefaultUserLimitUsage(user),
         limit5hUsd: user.limit5hUsd ?? null,
         limitWeeklyUsd: user.limitWeeklyUsd ?? null,
         limitMonthlyUsd: user.limitMonthlyUsd ?? null,
@@ -1251,6 +1325,8 @@ export async function addUser(data: {
       is_enabled: true,
       expires_at: undefined,
       provider_group: providerGroup,
+      daily_reset_mode: newUser.dailyResetMode,
+      daily_reset_time: newUser.dailyResetMode === "fixed" ? newUser.dailyResetTime : undefined,
     });
 
     revalidatePath("/dashboard");
@@ -1621,6 +1697,7 @@ export async function removeUser(userId: number): Promise<ActionResult> {
       };
     }
 
+    await deleteKeysByUserId(userId);
     await deleteUser(userId);
     revalidatePath("/dashboard");
     return { ok: true };
@@ -1677,7 +1754,7 @@ export async function getUserLimitUsage(userId: number): Promise<
 
     // 获取每日消费（使用用户的 dailyResetTime 和 dailyResetMode 配置）
     const resetTime = user.dailyResetTime ?? "00:00";
-    const resetMode = user.dailyResetMode ?? "fixed";
+    const resetMode = user.dailyResetMode ?? "rolling";
     const { startTime, endTime } = await getTimeRangeForPeriodWithMode(
       "daily",
       resetTime,

@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export function DeleteKeyConfirm({
   keyData,
   onSuccess,
 }: DeleteKeyConfirmProps & { onSuccess?: () => void }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const t = useTranslations("dashboard.deleteKeyConfirm");
 
@@ -39,7 +39,9 @@ export function DeleteKeyConfirm({
           return;
         }
         onSuccess?.();
-        router.refresh();
+        queryClient.invalidateQueries({ queryKey: ["users"] });
+        queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+        queryClient.invalidateQueries({ queryKey: ["userTags"] });
       } catch (error) {
         console.error("删除Key失败:", error);
         toast.error(t("errors.retryError"));

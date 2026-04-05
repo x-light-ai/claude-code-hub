@@ -279,12 +279,33 @@
       "expiresAt": {
         "label": "过期时间",
         "placeholder": "选择过期时间",
-        "description": "留空表示永不过期"
+        "description": "留空表示永不过期",
+        "relativePending": "首次真实 API 请求后开始计时",
+        "relativeActivated": "已激活，到期：{date}"
       },
       "durationDays": {
         "label": "相对有效期（天）",
         "placeholder": "留空表示不启用",
         "description": "首次真实 API 请求时开始计时；与固定过期时间互斥。若当前 Key 尚未过期，重新设置后会在现有到期时间基础上顺延。"
+      },
+      "expiryActions": {
+        "label": "有效期操作",
+        "description": "已激活的相对有效期不会随普通保存自动变更，请明确选择操作。",
+        "options": {
+          "none": "不调整有效期",
+          "extend": "增加有效期",
+          "reduce": "减少有效期",
+          "fixed": "改成固定到期时间"
+        },
+        "daysLabel": "调整天数",
+        "daysPlaceholder": "请输入天数",
+        "extendDescription": "将在当前到期时间基础上顺延指定天数。",
+        "reduceDescription": "将在当前到期时间基础上减少指定天数。",
+        "fixedLabel": "固定到期时间",
+        "fixedPlaceholder": "选择固定到期时间",
+        "fixedDescription": "保存后将改为固定到期时间，并清除相对有效期。",
+        "daysRequired": "请输入有效的调整天数",
+        "fixedRequired": "请选择固定到期时间"
       },
       "canLoginWebUi": {
         "label": "启用独立余额查询页",

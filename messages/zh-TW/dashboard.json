@@ -1813,7 +1813,9 @@
       "clickToDisableKey": "點擊停用密鑰",
       "clickToEnableKey": "點擊啟用密鑰",
       "operationFailed": "操作失敗",
-      "clickToQuickRenew": "點擊快速續期"
+      "clickToQuickRenew": "點擊快速續期",
+      "relativePending": "首次真實 API 請求後開始計時",
+      "relativeActivated": "已啟用，目前到期時間：{date}"
     },
     "userStatus": {
       "enabled": "啟用",

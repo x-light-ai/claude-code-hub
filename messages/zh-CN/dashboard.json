@@ -1828,7 +1828,9 @@
       "clickToDisableKey": "点击禁用密钥",
       "clickToEnableKey": "点击启用密钥",
       "operationFailed": "操作失败",
-      "clickToQuickRenew": "点击快捷续期"
+      "clickToQuickRenew": "点击快捷续期",
+      "relativePending": "首次真实 API 请求后开始计时",
+      "relativeActivated": "已激活，到期：{date}"
     },
     "userStatus": {
       "enabled": "启用",

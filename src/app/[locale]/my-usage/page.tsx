@@ -1,19 +1,10 @@
-import dynamic from "next/dynamic";
 import { getMyQuota } from "@/actions/my-usage";
 import { getServerTimeZone } from "@/actions/system-config";
+import { StatisticsSummaryCard } from "./_components/statistics-summary-card";
 import { CollapsibleQuotaCard } from "./_components/collapsible-quota-card";
 import { ExpirationInfo } from "./_components/expiration-info";
 import { MyUsageHeader } from "./_components/my-usage-header";
-import { ProviderGroupInfo } from "./_components/provider-group-info";
 import { UsageLogsSection } from "./_components/usage-logs-section";
-
-const StatisticsSummaryCard = dynamic(
-  () => import("./_components/statistics-summary-card").then((mod) => mod.StatisticsSummaryCard),
-  {
-    ssr: false,
-    loading: () => <div className="min-h-[320px] rounded-lg border bg-card" />,
-  }
-);
 
 export default async function MyUsagePage() {
   const [quotaResult, timeZoneResult] = await Promise.all([getMyQuota(), getServerTimeZone()]);
@@ -28,20 +19,11 @@ export default async function MyUsagePage() {
       <MyUsageHeader keyName={quota?.keyName} userName={quota?.userName} />
 
       {quota ? (
-        <div className="space-y-3">
-          <ProviderGroupInfo
-            keyProviderGroup={quota.keyProviderGroup}
-            userProviderGroup={quota.userProviderGroup}
-            userAllowedModels={quota.userAllowedModels}
-            userAllowedClients={quota.userAllowedClients}
-          />
-          <ExpirationInfo
-            keyExpiresAt={keyExpiresAt}
-            userExpiresAt={userExpiresAt}
-            userRpmLimit={quota.userRpmLimit}
-            timezone={serverTimeZone}
-          />
-        </div>
+        <ExpirationInfo
+          keyExpiresAt={keyExpiresAt}
+          userRpmLimit={quota.userRpmLimit}
+          timezone={serverTimeZone}
+        />
       ) : null}
 
       <CollapsibleQuotaCard quota={quota} loading={false} />

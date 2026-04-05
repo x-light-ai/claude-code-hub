@@ -8,7 +8,6 @@ import { formatDate, getLocaleDateFormat } from "@/lib/utils/date-format";
 
 interface ExpirationInfoProps {
   keyExpiresAt: Date | null;
-  userExpiresAt: Date | null;
   userRpmLimit?: number | null;
   className?: string;
   /** IANA timezone for display (e.g., "Asia/Shanghai"). Falls back to local time when omitted. */
@@ -22,7 +21,6 @@ type ExpireStatus = "none" | "normal" | "warning" | "danger" | "expired";
 
 export function ExpirationInfo({
   keyExpiresAt,
-  userExpiresAt,
   userRpmLimit,
   className,
   timezone,
@@ -31,7 +29,6 @@ export function ExpirationInfo({
   const locale = useLocale();
 
   const keyCountdown = useCountdown(keyExpiresAt ?? null, Boolean(keyExpiresAt));
-  const userCountdown = useCountdown(userExpiresAt ?? null, Boolean(userExpiresAt));
 
   const formatExpiry = (value: Date | null) => {
     if (!value) return t("neverExpires");
@@ -102,9 +99,8 @@ export function ExpirationInfo({
   };
 
   return (
-    <div className={cn("grid gap-3 sm:grid-cols-3", className)}>
+    <div className={cn("grid gap-3 sm:grid-cols-2", className)}>
       {renderItem(t("keyExpires"), keyExpiresAt, keyCountdown)}
-      {renderItem(t("userExpires"), userExpiresAt, userCountdown)}
       <div className="space-y-2 rounded-md border border-border/60 bg-card/50 p-3">
         <p className="text-xs font-medium text-muted-foreground">{t("rpmLimit")}</p>
         <div className="flex items-center gap-2">

@@ -11,7 +11,7 @@ import { resolveSystemTimezone } from "@/lib/utils/timezone";
 import { getSystemSettings } from "@/repository/system-config";
 import { AppProviders } from "../providers";
 
-const FALLBACK_TITLE = "Claude Code Hub";
+const FALLBACK_TITLE = "AI词元 管理系统";
 
 export async function generateMetadata({
   params,

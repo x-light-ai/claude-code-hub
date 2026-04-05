@@ -3,15 +3,8 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layers, Loader2, Plus, Search, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyUsageData } from "@/actions/users";
-import {
-  getAllUserKeyGroups,
-  getAllUserTags,
-  getUsers,
-  getUsersBatchCore,
-  getUsersUsageBatch,
-} from "@/actions/users";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getAllUserKeyGroups, getAllUserTags, getUsers, getUsersBatch } from "@/actions/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,8 +16,6 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TagInput } from "@/components/ui/tag-input";
-import { clearUsageCache } from "@/lib/dashboard/user-limit-usage-cache";
-import { loadUserUsagePagesSequentially } from "@/lib/dashboard/user-usage-loader";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { CurrencyCode } from "@/lib/utils/currency";
 import { parseProviderGroups } from "@/lib/utils/provider-group";
@@ -34,9 +25,6 @@ import { BatchEditDialog } from "../_components/user/batch-edit/batch-edit-dialo
 import { CreateUserDialog } from "../_components/user/create-user-dialog";
 import { UserManagementTable } from "../_components/user/user-management-table";
 
-/**
- * Normalize provider-group tags with the shared parser to keep client/server behavior aligned.
- */
 function splitTags(value?: string | null): string[] {
   return parseProviderGroups(value);
 }
@@ -79,9 +67,7 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     | "createdAt"
   >("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [usageByKeyId, setUsageByKeyId] = useState<Record<number, KeyUsageData>>({});
 
-  // Debounce search term to avoid frequent API requests
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const pendingTagFiltersKey = useMemo(
     () => pendingTagFilters.slice().sort().join("|"),
@@ -94,13 +80,11 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
   const debouncedPendingTagsKey = useDebounce(pendingTagFiltersKey, 300);
   const debouncedPendingKeyGroupsKey = useDebounce(pendingKeyGroupFiltersKey, 300);
 
-  // Use debounced value for API queries, raw value for UI highlighting
   const resolvedSearchTerm = debouncedSearchTerm.trim() ? debouncedSearchTerm.trim() : undefined;
   const resolvedTagFilters = tagFilters.length > 0 ? tagFilters : undefined;
   const resolvedKeyGroupFilters = keyGroupFilters.length > 0 ? keyGroupFilters : undefined;
   const resolvedStatusFilter = statusFilter === "all" ? undefined : statusFilter;
 
-  // Stable queryKey for non-admin users to avoid unnecessary cache entries
   const queryKey = useMemo(
     () =>
       isAdmin
@@ -143,7 +127,7 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
         return { users, nextCursor: null, hasMore: false };
       }
 
-      const result = await getUsersBatchCore({
+      const result = await getUsersBatch({
         cursor: pageParam,
         limit: 50,
         searchTerm: resolvedSearchTerm,
@@ -160,9 +144,10 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     initialPageParam: undefined as string | undefined,
+    staleTime: 30_000,
+    refetchOnMount: false,
   });
 
-  // Independent tag query - breaks circular dependency
   const { data: allTags = [] } = useQuery({
     queryKey: ["userTags"],
     queryFn: async () => {
@@ -183,96 +168,7 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     enabled: isAdmin,
   });
 
-  const pageUserIds = useMemo(
-    () => (data?.pages ?? []).map((page) => page.users.map((u) => u.id)),
-    [data]
-  );
-  const usageDatasetKey = useMemo(() => JSON.stringify(queryKey), [queryKey]);
-  const latestUsageDatasetKeyRef = useRef(usageDatasetKey);
-
-  useEffect(() => {
-    latestUsageDatasetKeyRef.current = usageDatasetKey;
-    setUsageByKeyId({});
-  }, [usageDatasetKey]);
-
-  useEffect(() => {
-    if (!isAdmin || pageUserIds.length === 0) {
-      return;
-    }
-
-    const abortController = new AbortController();
-    const requestedDatasetKey = usageDatasetKey;
-
-    const scheduleUsageHydration = () => {
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      void loadUserUsagePagesSequentially({
-        pageUserIds,
-        signal: abortController.signal,
-        fetchUsagePage: async (userIds) => {
-          const result = await queryClient.fetchQuery({
-            queryKey: ["users-usage", userIds],
-            queryFn: () => getUsersUsageBatch(userIds),
-            staleTime: 60_000,
-          });
-          return result.ok ? result.data.usageByKeyId : {};
-        },
-        onPageLoaded: (pageUsageByKeyId) => {
-          if (latestUsageDatasetKeyRef.current !== requestedDatasetKey) {
-            return;
-          }
-
-          setUsageByKeyId((previous) => ({
-            ...previous,
-            ...pageUsageByKeyId,
-          }));
-        },
-      });
-    };
-
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      const idleCallbackId = window.requestIdleCallback(scheduleUsageHydration, { timeout: 1000 });
-      return () => {
-        abortController.abort();
-        window.cancelIdleCallback(idleCallbackId);
-      };
-    }
-
-    const timeoutId = globalThis.setTimeout(scheduleUsageHydration, 300);
-    return () => {
-      abortController.abort();
-      globalThis.clearTimeout(timeoutId);
-    };
-  }, [isAdmin, pageUserIds, queryClient, usageDatasetKey]);
-
-  const coreUsers = useMemo(() => data?.pages.flatMap((page) => page.users) ?? [], [data]);
-
-  // Merge usage data into core users
-  const allUsers = useMemo(() => {
-    if (Object.keys(usageByKeyId).length === 0) return coreUsers;
-    return coreUsers.map((user) => {
-      const hasUsageForAnyKey = user.keys.some((k) => k.id in usageByKeyId);
-      if (!hasUsageForAnyKey) return user;
-      return {
-        ...user,
-        keys: user.keys.map((key) => {
-          const usage = usageByKeyId[key.id];
-          if (!usage) return key;
-          return {
-            ...key,
-            todayUsage: usage.todayUsage,
-            todayCallCount: usage.todayCallCount,
-            todayTokens: usage.todayTokens,
-            lastUsedAt: usage.lastUsedAt,
-            lastProviderName: usage.lastProviderName,
-            modelStats: usage.modelStats,
-          };
-        }),
-      };
-    });
-  }, [coreUsers, usageByKeyId]);
+  const allUsers = useMemo(() => data?.pages.flatMap((page) => page.users) ?? [], [data]);
 
   const visibleUsers = useMemo(() => {
     if (isAdmin) return allUsers;
@@ -304,16 +200,11 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     }
   }, [debouncedPendingKeyGroupsKey, pendingKeyGroupFilters, keyGroupFilters]);
 
-  // Batch edit / multi-select state
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(() => new Set());
   const [selectedKeyIds, setSelectedKeyIds] = useState<Set<number>>(() => new Set());
   const [batchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
-
-  // Create dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-
-  // Add key dialog state
   const [showAddKeyDialog, setShowAddKeyDialog] = useState(false);
   const [addKeyUser, setAddKeyUser] = useState<UserDisplay | null>(null);
 
@@ -369,9 +260,7 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     setPendingKeyGroupFilters(nextGroups);
   }, []);
 
-  // Use independent query instead of circular dependency
   const uniqueTags = isAdmin ? allTags : [];
-
   const uniqueKeyGroups = isAdmin ? allKeyGroups : [];
 
   const matchingKeyIds = useMemo(() => {
@@ -403,7 +292,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     return matchingIds;
   }, [visibleUsers, searchTerm, keyGroupFilters]);
 
-  // Determine if we should highlight keys (either search or keyGroup filter is active)
   const shouldHighlightKeys = searchTerm.trim().length > 0 || keyGroupFilters.length > 0;
   const selfUser = useMemo(() => (isAdmin ? undefined : visibleUsers[0]), [isAdmin, visibleUsers]);
 
@@ -413,7 +301,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     [visibleUsers]
   );
 
-  // Keep selection consistent with current filtered list while in multi-select mode.
   useEffect(() => {
     if (!isMultiSelectMode) return;
     const validUserIds = new Set(allVisibleUserIds);
@@ -497,7 +384,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
     setBatchEditDialogOpen(true);
   }, []);
 
-  // Memoize translations object to prevent unnecessary re-renders
   const tableTranslations = useMemo(
     () => ({
       table: {
@@ -593,10 +479,8 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
         )}
       </div>
 
-      {/* Provider Group & Access Restrictions block (non-admin users only) */}
       {!isAdmin && selfUser && (
         <div className="grid grid-cols-1 gap-4 rounded-lg border bg-muted/40 p-4 sm:grid-cols-2">
-          {/* Provider Groups */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-base font-semibold">
               <Layers className="h-4 w-4" />
@@ -614,7 +498,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
             </div>
           </div>
 
-          {/* Access Restrictions */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-base font-semibold">
               <ShieldCheck className="h-4 w-4" />
@@ -642,9 +525,7 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
         </div>
       )}
 
-      {/* Toolbar with search and filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
-        {/* Search input */}
         <div className="relative flex-1 min-w-[220px] sm:min-w-[280px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -657,7 +538,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
 
         {isAdmin ? (
           <>
-            {/* Tag filter - Multi-select */}
             {isInitialLoading ? (
               <Skeleton className="h-9 w-[240px]" />
             ) : (
@@ -681,7 +561,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
               )
             )}
 
-            {/* Key group filter */}
             {isInitialLoading ? (
               <Skeleton className="h-9 w-[240px]" />
             ) : (
@@ -705,7 +584,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
               )
             )}
 
-            {/* Sort by field */}
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder={t("toolbar.sortBy")} />
@@ -723,7 +601,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
               </SelectContent>
             </Select>
 
-            {/* Sort order */}
             <Select
               value={sortOrder}
               onValueChange={(value) => setSortOrder(value as "asc" | "desc")}
@@ -737,7 +614,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
               </SelectContent>
             </Select>
 
-            {/* Status filter */}
             <Select
               value={statusFilter}
               onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
@@ -789,9 +665,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
             onOpenBatchEdit={handleOpenBatchEdit}
             translations={tableTranslations}
             onRefresh={() => {
-              setUsageByKeyId({});
-              clearUsageCache();
-              queryClient.invalidateQueries({ queryKey: ["users-usage"] });
               refetch();
             }}
             isRefreshing={isRefreshing}
@@ -809,7 +682,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
         />
       ) : null}
 
-      {/* Create User Dialog (Admin) or Add Key Dialog (non-Admin) */}
       {isAdmin ? (
         <CreateUserDialog open={showCreateDialog} onOpenChange={handleCreateDialogClose} />
       ) : selfUser ? (
@@ -831,7 +703,6 @@ function UsersPageContent({ currentUser, currencyCode }: UsersPageClientProps) {
         />
       ) : null}
 
-      {/* Add Key Dialog (triggered from key list) */}
       {addKeyUser && (
         <AddKeyDialog
           open={showAddKeyDialog}

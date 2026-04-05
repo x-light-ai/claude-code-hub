@@ -20,9 +20,10 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 class FakeRedis {
-  status: "ready" | "end" = "ready";
+  status: "wait" | "ready" | "end" = "ready";
   readonly store = new Map<string, string>();
   readonly ttlByKey = new Map<string, number>();
+  private readonly listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 
   throwOnGet = false;
   throwOnSetex = false;
@@ -46,6 +47,26 @@ class FakeRedis {
     this.ttlByKey.delete(key);
     return existed ? 1 : 0;
   });
+
+  readonly once = vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+    const listeners = this.listeners.get(event) ?? new Set<(...args: unknown[]) => void>();
+    listeners.add(listener);
+    this.listeners.set(event, listeners);
+    return this;
+  });
+
+  readonly off = vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+    this.listeners.get(event)?.delete(listener);
+    return this;
+  });
+
+  emit(event: string, ...args: unknown[]) {
+    const listeners = [...(this.listeners.get(event) ?? [])];
+    this.listeners.delete(event);
+    for (const listener of listeners) {
+      listener(...args);
+    }
+  }
 }
 
 describe("RedisSessionStore", () => {
@@ -170,16 +191,20 @@ describe("RedisSessionStore", () => {
     expect(created.expiresAt - created.createdAt).toBe(120_000);
   });
 
-  it("create() throws when Redis setex fails", async () => {
+  it("create() waits for Redis to become ready", async () => {
     const { RedisSessionStore } = await import("@/lib/auth-session-store/redis-session-store");
 
-    redis.throwOnSetex = true;
+    redis.status = "wait";
     const store = new RedisSessionStore();
+    const createPromise = store.create({ keyFingerprint: "fp-wait", userId: 8, userRole: "user" });
 
-    await expect(
-      store.create({ keyFingerprint: "fp-fail", userId: 3, userRole: "user" })
-    ).rejects.toThrow("redis setex failed");
-    expect(loggerMock.error).toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    redis.status = "ready";
+    redis.emit("ready");
+
+    const created = await createPromise;
+    expect(created.keyFingerprint).toBe("fp-wait");
+    expect(redis.setex).toHaveBeenCalledTimes(1);
   });
 
   it("create() throws when Redis is not ready", async () => {

@@ -93,7 +93,7 @@ const OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA =
 /**
  * 用户创建数据验证schema
  */
-export const CreateUserSchema = z.object({
+export const CreateUserSchemaBase = z.object({
   name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符"),
   note: z.string().max(200, "备注不能超过200个字符").optional().default(""),
   providerGroup: z
@@ -206,12 +206,11 @@ export const CreateUserSchema = z.object({
       })
   ),
   // Daily quota reset mode
-  dailyResetMode: z.enum(["fixed", "rolling"]).optional().default("fixed"),
+  dailyResetMode: z.enum(["fixed", "rolling"]).optional().default("rolling"),
   dailyResetTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
-    .optional()
-    .default("00:00"),
+    .optional(),
   // Allowed clients (CLI/IDE restrictions)
   allowedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA,
   // Blocked clients (CLI/IDE restrictions)
@@ -222,12 +221,30 @@ export const CreateUserSchema = z.object({
     .max(50, "模型数量不能超过50个")
     .optional()
     .default([]),
+}).superRefine((data, ctx) => {
+  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定时间重置模式必须填写重置时间",
+      path: ["dailyResetTime"],
+    });
+  }
+});
+
+export const CreateUserSchema = CreateUserSchemaBase.superRefine((data, ctx) => {
+  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定时间重置模式必须填写重置时间",
+      path: ["dailyResetTime"],
+    });
+  }
 });
 
 /**
  * 用户更新数据验证schema
  */
-export const UpdateUserSchema = z.object({
+export const UpdateUserSchemaBase = z.object({
   name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符").optional(),
   note: z.string().max(200, "备注不能超过200个字符").optional(),
   providerGroup: z.string().max(200, "供应商分组不能超过200个字符").nullable().optional(),
@@ -344,6 +361,24 @@ export const UpdateUserSchema = z.object({
     .array(z.string().max(64, "模型名称长度不能超过64个字符"))
     .max(50, "模型数量不能超过50个")
     .optional(),
+}).superRefine((data, ctx) => {
+  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定时间重置模式必须填写重置时间",
+      path: ["dailyResetTime"],
+    });
+  }
+});
+
+export const UpdateUserSchema = UpdateUserSchemaBase.superRefine((data, ctx) => {
+  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "固定时间重置模式必须填写重置时间",
+      path: ["dailyResetTime"],
+    });
+  }
 });
 
 /**
@@ -353,6 +388,10 @@ export const KeyFormSchemaBase = z.object({
   name: z.string().min(1, "密钥名称不能为空").max(64, "密钥名称不能超过64个字符"),
   expiresAt: z
     .string()
+    .regex(
+      /^(|\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)$/,
+      "过期时间格式必须为 YYYY-MM-DD 或 YYYY-MM-DDTHH:mm[:ss]"
+    )
     .optional()
     .default("")
     .transform((val) => (val === "" ? undefined : val)),

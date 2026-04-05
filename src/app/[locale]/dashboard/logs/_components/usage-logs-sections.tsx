@@ -39,6 +39,7 @@ export async function UsageLogsDataSection({
       userId={userId}
       searchParams={resolvedSearchParams}
       serverTimeZone={serverTimeZone}
+      siteTitle={systemSettings.siteTitle}
       billingModelSource={systemSettings.billingModelSource}
       currencyCode={systemSettings.currencyDisplay}
       logsRefreshIntervalMs={getEnvConfig().DASHBOARD_LOGS_POLL_INTERVAL_MS}

@@ -1,14 +1,9 @@
-"use client";
-
-import { Menu } from "lucide-react";
+import { headers } from "next/headers";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { getTranslations } from "next-intl/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QuickLinks } from "./_components/quick-links";
-import { type TocItem, TocNav } from "./_components/toc-nav";
-import { useUsageDocAuth } from "./_components/usage-doc-auth-context";
+import { type TocItem } from "./_components/toc-nav";
+import { UsageDocPageShell } from "./_components/usage-doc-page-shell";
 
 const headingClasses = {
   h2: "scroll-m-20 text-2xl font-semibold leading-snug text-foreground",
@@ -134,6 +129,50 @@ function getCLIConfigs(t: (key: string) => string): Record<string, CLIConfig> {
 
 interface UsageDocContentProps {
   origin: string;
+}
+
+function buildUsageDocToc(t: Awaited<ReturnType<typeof getTranslations>>): TocItem[] {
+  const cliConfigs = getCLIConfigs(t);
+  const osLabels = {
+    macos: t("platforms.macos"),
+    windows: t("platforms.windows"),
+    linux: t("platforms.linux"),
+  } as const;
+
+  const cliOrder = [
+    cliConfigs.claudeCode,
+    cliConfigs.codex,
+    cliConfigs.gemini,
+    cliConfigs.opencode,
+    cliConfigs.droid,
+  ];
+
+  return [
+    ...cliOrder.flatMap((cli) => [
+      { id: cli.id, text: cli.title, level: 2 as const },
+      ...(["macos", "windows", "linux"] as const).map((os) => ({
+        id: `${cli.id}-${os}`,
+        text: osLabels[os],
+        level: 3 as const,
+      })),
+    ]),
+    { id: "common-commands", text: t("commonCommands.title"), level: 2 as const },
+    { id: "troubleshooting", text: t("troubleshooting.title"), level: 2 as const },
+  ];
+}
+
+async function resolveUsageDocOrigin() {
+  const headersList = await headers();
+  const forwardedProto = headersList.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = headersList.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || headersList.get("host")?.trim();
+
+  if (!host) {
+    return "";
+  }
+
+  const protocol = forwardedProto || (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  return `${protocol}://${host}`;
 }
 
 export function UsageDocContent({ origin }: UsageDocContentProps) {
@@ -1769,167 +1808,18 @@ curl -I ${resolvedOrigin}`}
 
 /**
  * 文档页面
- * 使用客户端组件渲染静态文档内容，并提供目录导航
- * 支持桌面端（sticky sidebar）和移动端（drawer）
- * 提供完整的无障碍支持（ARIA 标签、键盘导航、skip links）
+ * 由服务端渲染静态文档内容，客户端仅负责目录交互
  */
-export default function UsageDocPage() {
-  const t = useTranslations("usage");
-  const { isLoggedIn } = useUsageDocAuth();
-  const [activeId, setActiveId] = useState<string>("");
-  const [tocItems, setTocItems] = useState<TocItem[]>([]);
-  const [tocReady, setTocReady] = useState(false);
-  const [serviceOrigin, setServiceOrigin] = useState(
-    () => (typeof window !== "undefined" && window.location.origin) || ""
-  );
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  useEffect(() => {
-    setServiceOrigin(window.location.origin);
-  }, []);
-
-  // 生成目录并监听滚动
-  useEffect(() => {
-    // 获取所有标题
-    const headings = document.querySelectorAll("h2, h3");
-    const items: TocItem[] = [];
-
-    headings.forEach((heading) => {
-      // 为标题添加 id（如果没有的话）
-      if (!heading.id) {
-        heading.id = heading.textContent?.toLowerCase().replace(/\s+/g, "-") || "";
-      }
-
-      items.push({
-        id: heading.id,
-        text: heading.textContent || "",
-        level: parseInt(heading.tagName[1], 10),
-      });
-    });
-
-    setTocItems(items);
-    setTocReady(true);
-
-    // 监听滚动，高亮当前章节
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100;
-
-      for (const item of items) {
-        const element = document.getElementById(item.id);
-        if (element && element.offsetTop <= scrollPosition) {
-          setActiveId(item.id);
-        }
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    handleScroll(); // 初始化
-
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // 点击目录项滚动到对应位置
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      const offsetTop = element.offsetTop - 80;
-      window.scrollTo({
-        top: offsetTop,
-        behavior: "smooth",
-      });
-      // 移动端点击后关闭 Sheet
-      setSheetOpen(false);
-    }
-  };
+export default async function UsageDocPage() {
+  const [t, serviceOrigin] = await Promise.all([
+    getTranslations("usage"),
+    resolveUsageDocOrigin(),
+  ]);
+  const tocItems = buildUsageDocToc(t);
 
   return (
-    <>
-      {/* Skip Links - 无障碍支持 */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-      >
-        {t("skipLinks.mainContent")}
-      </a>
-      <a
-        href="#toc-navigation"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-40 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-      >
-        {t("skipLinks.tableOfContents")}
-      </a>
-
-      <div className="relative flex gap-6 lg:gap-8">
-        {/* 左侧主文档 */}
-        <div className="flex-1 min-w-0">
-          {/* 文档容器 */}
-          <div className="relative bg-card rounded-xl shadow-sm border p-4 sm:p-6 md:p-8 lg:p-12">
-            {/* 文档内容 */}
-            <main id="main-content" role={t("ui.main")} aria-label={t("ui.mainContent")}>
-              <UsageDocContent origin={serviceOrigin} />
-            </main>
-          </div>
-        </div>
-
-        {/* 右侧目录导航 - 桌面端 */}
-        <aside
-          id="toc-navigation"
-          className="hidden lg:block w-64 shrink-0"
-          aria-label={t("navigation.pageNavigation")}
-        >
-          <div className="sticky top-24 space-y-4">
-            <div className="bg-card rounded-lg border p-4">
-              <h4 className="font-semibold text-sm mb-3">{t("navigation.tableOfContents")}</h4>
-              <TocNav
-                tocItems={tocItems}
-                activeId={activeId}
-                tocReady={tocReady}
-                onItemClick={scrollToSection}
-              />
-            </div>
-
-            {/* 快速操作 */}
-            <div className="bg-card rounded-lg border p-4">
-              <h4 className="font-semibold text-sm mb-3">{t("navigation.quickLinks")}</h4>
-              <QuickLinks isLoggedIn={isLoggedIn} />
-            </div>
-          </div>
-        </aside>
-
-        {/* 移动端浮动导航按钮 */}
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="default"
-              size="icon"
-              className="fixed bottom-6 right-6 z-40 lg:hidden shadow-lg"
-              aria-label={t("navigation.openTableOfContents")}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-[85vw] sm:w-[400px] overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>{t("navigation.documentNavigation")}</SheetTitle>
-            </SheetHeader>
-            <div className="mt-6 space-y-6">
-              <div>
-                <h4 className="font-semibold text-sm mb-3">{t("navigation.tableOfContents")}</h4>
-                <TocNav
-                  tocItems={tocItems}
-                  activeId={activeId}
-                  tocReady={tocReady}
-                  onItemClick={scrollToSection}
-                />
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="font-semibold text-sm mb-3">{t("navigation.quickLinks")}</h4>
-                <QuickLinks isLoggedIn={isLoggedIn} onBackToTop={() => setSheetOpen(false)} />
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    </>
+    <UsageDocPageShell tocItems={tocItems}>
+      <UsageDocContent origin={serviceOrigin} />
+    </UsageDocPageShell>
   );
 }

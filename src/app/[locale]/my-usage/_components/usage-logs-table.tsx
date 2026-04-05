@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useVirtualizedInfiniteList } from "@/hooks/use-virtualized-infinite-list";
-import { CURRENCY_CONFIG, type CurrencyCode } from "@/lib/utils";
+import { CURRENCY_CONFIG, cn, type CurrencyCode } from "@/lib/utils";
 import { copyTextToClipboard } from "@/lib/utils/clipboard";
 
 const ROW_HEIGHT = 80;
@@ -157,17 +157,17 @@ export function UsageLogsTable({
         ) : null}
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[860px] rounded-md border">
+      <div className="overflow-x-hidden">
+        <div className="w-full rounded-md border">
           <div className="bg-muted/30 border-b sticky top-0 z-10">
             <div className="flex items-center h-9 text-[11px] font-medium text-muted-foreground/80 tracking-wide">
-              <div className="flex-[1] min-w-[150px] px-3">{t("table.time")}</div>
-              <div className="flex-[2.2] min-w-[240px] px-2">{t("table.model")}</div>
-              <div className="flex-[0.9] min-w-[100px] px-2 text-right">{t("table.tokens")}</div>
-              <div className="flex-[1] min-w-[120px] px-2 text-right">{t("table.cacheWrite")}</div>
-              <div className="flex-[0.8] min-w-[90px] px-2 text-right">{t("table.cacheRead")}</div>
-              <div className="flex-[0.8] min-w-[90px] px-2 text-right">{t("table.cost")}</div>
-              <div className="flex-[0.7] min-w-[80px] px-3">{t("table.status")}</div>
+              <div className="w-[20%] min-w-0 px-3">{t("table.time")}</div>
+              <div className="w-[27%] min-w-0 px-2">{t("table.model")}</div>
+              <div className="w-[11%] min-w-0 whitespace-nowrap px-2 text-right">{t("table.tokens")}</div>
+              <div className="w-[12%] min-w-0 px-2 text-right">{t("table.cacheWrite")}</div>
+              <div className="w-[10%] min-w-0 px-2 text-right">{t("table.cacheRead")}</div>
+              <div className="w-[10%] min-w-0 px-2 text-right">{t("table.cost")}</div>
+              <div className="w-[10%] min-w-0 px-3 text-right">{t("table.status")}</div>
             </div>
           </div>
 
@@ -223,19 +223,19 @@ export function UsageLogsTable({
                     }}
                     className="flex items-center border-b text-sm hover:bg-accent/50"
                   >
-                    <div className="flex-[1] min-w-[150px] px-3 font-mono text-xs text-muted-foreground">
+                    <div className="w-[20%] min-w-0 px-3 font-mono text-xs text-muted-foreground">
                       {log.createdAt
                         ? formatInTimeZone(new Date(log.createdAt), timeZone, "yyyy-MM-dd HH:mm:ss")
                         : "-"}
                     </div>
-                    <div className="flex-[2.2] min-w-[240px] px-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-sm">
+                    <div className="w-[27%] min-w-0 px-2">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex min-w-0 items-center gap-1.5 text-sm">
                           {log.model ? <ModelVendorIcon modelId={log.model} /> : null}
                           {log.model ? (
                             <button
                               type="button"
-                              className="max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left hover:underline"
+                              className="min-w-0 max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left hover:underline"
                               onClick={() => handleCopyModel(log.model!)}
                             >
                               {log.model}
@@ -256,7 +256,7 @@ export function UsageLogsTable({
                         ) : null}
                       </div>
                     </div>
-                    <div className="flex-[0.9] min-w-[100px] px-2 text-right text-xs font-mono tabular-nums">
+                    <div className="w-[11%] min-w-0 px-2 text-right text-xs font-mono tabular-nums">
                       <div className="flex flex-col items-end leading-tight">
                         <span>{formatTokenAmount(log.inputTokens)}</span>
                         <span className="text-muted-foreground">
@@ -264,19 +264,19 @@ export function UsageLogsTable({
                         </span>
                       </div>
                     </div>
-                    <div className="flex-[1] min-w-[120px] px-2 text-right font-mono text-xs">
+                    <div className="w-[12%] min-w-0 px-2 text-right font-mono text-xs">
                       <TooltipProvider>
                         <Tooltip delayDuration={250}>
                           <TooltipTrigger asChild>
-                            <div className="flex items-center gap-2 w-full cursor-help">
+                            <div className="flex items-center gap-2 w-full cursor-help overflow-hidden">
                               {log.cacheCreationInputTokens &&
                               log.cacheCreationInputTokens > 0 &&
                               log.cacheTtlApplied ? (
-                                <Badge variant="outline" className="text-[10px] leading-tight px-1">
+                                <Badge variant="outline" className="shrink-0 text-[10px] leading-tight px-1">
                                   {log.cacheTtlApplied}
                                 </Badge>
                               ) : null}
-                              <span className="ml-auto">
+                              <span className="ml-auto truncate">
                                 {formatTokenAmount(log.cacheCreationInputTokens)}
                               </span>
                             </div>
@@ -288,23 +288,22 @@ export function UsageLogsTable({
                         </Tooltip>
                       </TooltipProvider>
                     </div>
-                    <div className="flex-[0.8] min-w-[90px] px-2 text-right font-mono text-xs">
+                    <div className="w-[10%] min-w-0 px-2 text-right font-mono text-xs truncate">
                       {formatTokenAmount(log.cacheReadInputTokens)}
                     </div>
-                    <div className="flex-[0.8] min-w-[90px] px-2 text-right text-sm font-mono">
+                    <div className="w-[10%] min-w-0 px-2 text-right text-sm font-mono truncate">
                       {CURRENCY_CONFIG[currencyCode]?.symbol ?? currencyCode}
                       {Number(log.cost ?? 0).toFixed(4)}
                     </div>
-                    <div className="flex-[0.7] min-w-[80px] px-3">
+                    <div className="flex w-[10%] min-w-0 justify-end px-3">
                       <Badge
                         variant={
                           log.statusCode && log.statusCode >= 400 ? "destructive" : "outline"
                         }
-                        className={
-                          log.statusCode === 200
-                            ? "border-green-500 text-green-600 dark:text-green-400"
-                            : undefined
-                        }
+                        className={cn(
+                          "max-w-full truncate",
+                          log.statusCode === 200 && "border-green-500 text-green-600 dark:text-green-400"
+                        )}
                       >
                         {log.statusCode ?? "-"}
                       </Badge>

@@ -113,12 +113,23 @@ export function EmailField(props: FormFieldProps) {
  * 数字字段组件
  */
 export function NumberField(
-  props: Omit<FormFieldProps, "type"> & {
+  props: Omit<FormFieldProps, "type" | "value" | "onChange"> & {
+    value: string | number | null | undefined;
+    onChange: (value: string | null) => void;
     min?: number;
     max?: number;
   }
 ) {
-  return <FormField {...props} type="number" min={props.min} max={props.max} />;
+  return (
+    <FormField
+      {...props}
+      value={props.value ?? ""}
+      onChange={(value) => props.onChange(value === "" ? null : value)}
+      type="number"
+      min={props.min}
+      max={props.max}
+    />
+  );
 }
 
 /**

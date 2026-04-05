@@ -9,7 +9,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-const getTranslationsMock = vi.fn(async () => (key: string) => key);
+const getTranslationsMock = vi.hoisted(() => vi.fn(async () => (key: string) => key));
 vi.mock("next-intl/server", () => ({
   getTranslations: getTranslationsMock,
 }));
@@ -209,6 +209,131 @@ describe("editKey: expiresAt 清除/不更新语义", () => {
     const res = await editKey(1, { name: "k2", expiresAt: "2026-01-04", durationDays: 7 });
 
     expect(res.ok).toBe(false);
+  });
+
+  test("携带 expiresAt 空串与 durationDays 时，会优先按清空 expiresAt 处理并清除 durationDays", async () => {
+    const { editKey } = await import("@/actions/keys");
+
+    const res = await editKey(1, { name: "k2", expiresAt: "", durationDays: 7 });
+
+    expect(res.ok).toBe(true);
+    expect(updateKeyMock).toHaveBeenCalledTimes(1);
+    expect(updateKeyMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        expires_at: null,
+        duration_days: null,
+      })
+    );
+  });
+  test("已激活相对有效期 Key 再次携带 durationDays 时应报错", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    findKeyByIdMock.mockResolvedValueOnce({
+      id: 1,
+      userId: 10,
+      key: "sk-test",
+      name: "k",
+      isEnabled: true,
+      expiresAt: new Date("2026-01-04T23:59:59.999Z"),
+      durationDays: 7,
+      canLoginWebUi: true,
+      limit5hUsd: null,
+      limitDailyUsd: null,
+      dailyResetMode: "fixed",
+      dailyResetTime: "00:00",
+      limitWeeklyUsd: null,
+      limitMonthlyUsd: null,
+      limitTotalUsd: null,
+      limitConcurrentSessions: 0,
+      providerGroup: "default",
+      cacheTtlPreference: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    });
+
+    const { editKey } = await import("@/actions/keys");
+
+    const res = await editKey(1, { name: "k2", durationDays: 7 });
+
+    expect(res.ok).toBe(false);
+    expect(updateKeyMock).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  test("adjustRelativeKeyExpiry extend 应顺延到期时间", async () => {
+    findKeyByIdMock.mockResolvedValueOnce({
+      id: 1,
+      userId: 10,
+      key: "sk-test",
+      name: "k",
+      isEnabled: true,
+      expiresAt: new Date("2026-01-04T23:59:59.999Z"),
+      durationDays: 7,
+      canLoginWebUi: true,
+      limit5hUsd: null,
+      limitDailyUsd: null,
+      dailyResetMode: "fixed",
+      dailyResetTime: "00:00",
+      limitWeeklyUsd: null,
+      limitMonthlyUsd: null,
+      limitTotalUsd: null,
+      limitConcurrentSessions: 0,
+      providerGroup: "default",
+      cacheTtlPreference: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    });
+
+    const { adjustRelativeKeyExpiry } = await import("@/actions/keys");
+    const res = await adjustRelativeKeyExpiry(1, { mode: "extend", days: 3 });
+
+    expect(res.ok).toBe(true);
+    expect(updateKeyMock).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        expires_at: expect.any(Date),
+      })
+    );
+    expect((updateKeyMock.mock.calls[0]?.[1].expires_at as Date).toISOString()).toBe(
+      "2026-01-07T23:59:59.999Z"
+    );
+  });
+
+  test("adjustRelativeKeyExpiry reduce 应提前到期时间", async () => {
+    findKeyByIdMock.mockResolvedValueOnce({
+      id: 1,
+      userId: 10,
+      key: "sk-test",
+      name: "k",
+      isEnabled: true,
+      expiresAt: new Date("2026-01-04T23:59:59.999Z"),
+      durationDays: 7,
+      canLoginWebUi: true,
+      limit5hUsd: null,
+      limitDailyUsd: null,
+      dailyResetMode: "fixed",
+      dailyResetTime: "00:00",
+      limitWeeklyUsd: null,
+      limitMonthlyUsd: null,
+      limitTotalUsd: null,
+      limitConcurrentSessions: 0,
+      providerGroup: "default",
+      cacheTtlPreference: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    });
+
+    const { adjustRelativeKeyExpiry } = await import("@/actions/keys");
+    const res = await adjustRelativeKeyExpiry(1, { mode: "reduce", days: 2 });
+
+    expect(res.ok).toBe(true);
+    expect((updateKeyMock.mock.calls[0]?.[1].expires_at as Date).toISOString()).toBe(
+      "2026-01-02T23:59:59.999Z"
+    );
   });
 });
 

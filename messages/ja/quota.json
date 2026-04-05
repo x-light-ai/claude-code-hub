@@ -256,7 +256,9 @@
       "expiresAt": {
         "label": "有効期限",
         "placeholder": "有効期限を選択",
-        "description": "空欄の場合は無期限"
+        "description": "空欄の場合は無期限",
+        "relativePending": "最初の実際の API リクエスト後にカウント開始",
+        "relativeActivated": "有効化済み。現在の有効期限: {date}"
       },
       "durationDays": {
         "label": "相対有効日数",

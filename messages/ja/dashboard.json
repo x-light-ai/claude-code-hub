@@ -1805,7 +1805,9 @@
       "clickToDisableKey": "クリックしてキーを無効化",
       "clickToEnableKey": "クリックしてキーを有効化",
       "operationFailed": "操作に失敗しました",
-      "clickToQuickRenew": "クリックして更新"
+      "clickToQuickRenew": "クリックして更新",
+      "relativePending": "最初の実際の API リクエスト後にカウント開始",
+      "relativeActivated": "有効化済み。現在の有効期限: {date}"
     },
     "userStatus": {
       "enabled": "有効",

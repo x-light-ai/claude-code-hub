@@ -1869,7 +1869,9 @@
       "clickToDisableKey": "Click to disable key",
       "clickToEnableKey": "Click to enable key",
       "operationFailed": "Operation failed",
-      "clickToQuickRenew": "Click to quick renew"
+      "clickToQuickRenew": "Click to quick renew",
+      "relativePending": "Countdown starts after the first real API request",
+      "relativeActivated": "Activated. Current expiration time: {date}"
     },
     "userStatus": {
       "enabled": "Enabled",

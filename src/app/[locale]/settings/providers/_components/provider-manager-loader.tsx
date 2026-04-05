@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   getProviderStatisticsAsync,
   getProviders,
@@ -23,23 +24,35 @@ type ProviderHealthStatus = Record<
   }
 >;
 
-async function fetchSystemSettings(): Promise<{ currencyDisplay: CurrencyCode }> {
-  const response = await fetch("/api/system-settings");
-  if (!response.ok) {
-    throw new Error("FETCH_SETTINGS_FAILED");
-  }
-  return response.json() as Promise<{ currencyDisplay: CurrencyCode }>;
-}
-
 interface ProviderManagerLoaderProps {
   currentUser?: User;
   enableMultiProviderTypes?: boolean;
+  currencyCode?: CurrencyCode;
 }
 
 function ProviderManagerLoaderContent({
   currentUser,
   enableMultiProviderTypes = true,
+  currencyCode = "USD",
 }: ProviderManagerLoaderProps) {
+  const [shouldLoadSecondaryData, setShouldLoadSecondaryData] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const idleCallbackId = window.requestIdleCallback(() => setShouldLoadSecondaryData(true), {
+        timeout: 1000,
+      });
+      return () => {
+        window.cancelIdleCallback(idleCallbackId);
+      };
+    }
+
+    const timeoutId = globalThis.setTimeout(() => setShouldLoadSecondaryData(true), 300);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, []);
+
   const {
     data: providers = [],
     isLoading: isProvidersLoading,
@@ -51,41 +64,27 @@ function ProviderManagerLoaderContent({
     staleTime: 30_000,
   });
 
-  const {
-    data: healthStatus = {} as ProviderHealthStatus,
-    isLoading: isHealthLoading,
-    isFetching: isHealthFetching,
-  } = useQuery<ProviderHealthStatus>({
-    queryKey: ["providers-health"],
-    queryFn: getProvidersHealthStatus,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
+  const { data: healthStatus = {} as ProviderHealthStatus, isFetching: isHealthFetching } =
+    useQuery<ProviderHealthStatus>({
+      queryKey: ["providers-health"],
+      queryFn: getProvidersHealthStatus,
+      enabled: shouldLoadSecondaryData,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    });
 
-  // Statistics loaded independently with longer cache
   const { data: statistics = {} as ProviderStatisticsMap, isLoading: isStatisticsLoading } =
     useQuery<ProviderStatisticsMap>({
       queryKey: ["providers-statistics"],
       queryFn: getProviderStatisticsAsync,
+      enabled: shouldLoadSecondaryData,
       refetchOnWindowFocus: false,
       staleTime: 30_000,
       refetchInterval: 60_000,
     });
 
-  const {
-    data: systemSettings,
-    isLoading: isSettingsLoading,
-    isFetching: isSettingsFetching,
-  } = useQuery<{ currencyDisplay: CurrencyCode }>({
-    queryKey: ["system-settings"],
-    queryFn: fetchSystemSettings,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
-
-  const loading = isProvidersLoading || isHealthLoading || isSettingsLoading;
-  const refreshing = !loading && (isProvidersFetching || isHealthFetching || isSettingsFetching);
-  const currencyCode = systemSettings?.currencyDisplay ?? "USD";
+  const loading = isProvidersLoading;
+  const refreshing = !loading && (isProvidersFetching || (shouldLoadSecondaryData && isHealthFetching));
 
   return (
     <ProviderManager

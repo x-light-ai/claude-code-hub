@@ -575,7 +575,10 @@ export function SystemSettingsForm({ initialSettings }: SystemSettingsFormProps)
                 {t("enableClaudeMetadataUserIdInjection")}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {t("enableClaudeMetadataUserIdInjectionDesc")}
+                {t("enableClaudeMetadataUserIdInjectionDesc", {
+                  hash: "{hash}",
+                  sessionId: "{sessionId}",
+                })}
               </p>
             </div>
           </div>

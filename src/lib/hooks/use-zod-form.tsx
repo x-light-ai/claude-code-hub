@@ -63,7 +63,7 @@ export function useZodForm<T extends z.ZodSchema>({
       const value = (raw as string | number) ?? "";
       return {
         value,
-        onChange: (val: string) => setValue(field, val),
+        onChange: (val: string | null) => setValue(field, val),
         error: errors[field as string],
         touched: true,
       };

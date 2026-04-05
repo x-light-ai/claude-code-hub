@@ -570,6 +570,17 @@ export async function deleteKey(id: number): Promise<boolean> {
   return result.length > 0;
 }
 
+export async function deleteKeysByUserId(userId: number): Promise<number> {
+  const result = await db
+    .update(keys)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(keys.userId, userId), isNull(keys.deletedAt)))
+    .returning({ id: keys.id, key: keys.key });
+
+  await Promise.all(result.map((row) => invalidateCachedKey(row.key).catch(() => {})));
+  return result.length;
+}
+
 export async function resetKeyCostResetAt(keyId: number, resetAt: Date | null): Promise<boolean> {
   const result = await db
     .update(keys)

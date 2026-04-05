@@ -21,7 +21,7 @@ import type { CurrencyCode } from "@/lib/utils/currency";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { Key } from "@/types/key";
 import type { ProviderDisplay } from "@/types/provider";
-import type { BillingModelSource, SystemSettings } from "@/types/system-config";
+import type { BillingModelSource } from "@/types/system-config";
 import { buildLogsUrlQuery, parseLogsUrlFilters } from "../_utils/logs-query";
 import { ColumnVisibilityDropdown } from "./column-visibility-dropdown";
 import { UsageLogsFilters } from "./usage-logs-filters";
@@ -39,16 +39,9 @@ interface UsageLogsViewVirtualizedProps {
   searchParams: { [key: string]: string | string[] | undefined };
   currencyCode?: CurrencyCode;
   billingModelSource?: BillingModelSource;
+  siteTitle?: string | null;
   serverTimeZone?: string;
   logsRefreshIntervalMs?: number;
-}
-
-async function fetchSystemSettings(): Promise<SystemSettings> {
-  const response = await fetch("/api/system-settings");
-  if (!response.ok) {
-    throw new Error("FETCH_SETTINGS_FAILED");
-  }
-  return response.json() as Promise<SystemSettings>;
 }
 
 async function fetchOverviewData(): Promise<OverviewData> {
@@ -67,6 +60,7 @@ function UsageLogsViewContent({
   searchParams: _searchParams, // Kept for SSR hydration, but filters use useSearchParams
   currencyCode = "USD",
   billingModelSource = "original",
+  siteTitle,
   serverTimeZone,
   logsRefreshIntervalMs,
 }: UsageLogsViewVirtualizedProps) {
@@ -128,16 +122,8 @@ function UsageLogsViewContent({
     [msFormatter, secFormatter]
   );
 
-  const shouldFetchSettings = !currencyCode || !billingModelSource;
-  const { data: systemSettings } = useQuery<SystemSettings>({
-    queryKey: ["system-settings"],
-    queryFn: fetchSystemSettings,
-    enabled: shouldFetchSettings || isFullscreenOpen,
-  });
-
-  const resolvedCurrencyCode = currencyCode ?? systemSettings?.currencyDisplay ?? "USD";
-  const resolvedBillingModelSource =
-    billingModelSource ?? systemSettings?.billingModelSource ?? "original";
+  const resolvedCurrencyCode = currencyCode;
+  const resolvedBillingModelSource = billingModelSource;
 
   const { data: providersData = EMPTY_PROVIDERS, isLoading: isProvidersLoading } = useQuery<
     ProviderDisplay[]
@@ -410,7 +396,7 @@ function UsageLogsViewContent({
           <div className="h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 flex items-center justify-between px-6 gap-4">
             <div className="min-w-0">
               <div className="text-base font-semibold tracking-tight truncate">
-                {systemSettings?.siteTitle ?? t("title.usageLogs")}
+                {siteTitle ?? t("title.usageLogs")}
               </div>
             </div>
 

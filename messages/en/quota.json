@@ -279,12 +279,33 @@
       "expiresAt": {
         "label": "Expiration Time",
         "placeholder": "Select expiration time",
-        "description": "Leave blank for never expires"
+        "description": "Leave blank for never expires",
+        "relativePending": "Countdown starts after the first real API request",
+        "relativeActivated": "Activated. Current expiration time: {date}"
       },
       "durationDays": {
         "label": "Relative Duration (days)",
         "placeholder": "Leave blank to disable",
         "description": "Starts counting from the first real API request; mutually exclusive with fixed expiration. If the key is still active, updating this extends from the current expiration time."
+      },
+      "expiryActions": {
+        "label": "Expiry action",
+        "description": "Activated relative expiry will not change on normal save. Choose an explicit expiry action if needed.",
+        "options": {
+          "none": "Do not change expiry",
+          "extend": "Extend expiry",
+          "reduce": "Reduce expiry",
+          "fixed": "Convert to fixed expiry"
+        },
+        "daysLabel": "Adjustment days",
+        "daysPlaceholder": "Enter days",
+        "extendDescription": "Adds the specified number of days to the current expiration time.",
+        "reduceDescription": "Subtracts the specified number of days from the current expiration time.",
+        "fixedLabel": "Fixed expiration time",
+        "fixedPlaceholder": "Select fixed expiration time",
+        "fixedDescription": "After saving, this key will use a fixed expiration time and relative expiry will be cleared.",
+        "daysRequired": "Please enter a valid number of days",
+        "fixedRequired": "Please select a fixed expiration time"
       },
       "canLoginWebUi": {
         "label": "Enable dedicated balance page",

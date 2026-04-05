@@ -374,18 +374,38 @@ app.openapi(getUserLimitUsageRoute, getUserLimitUsageHandler);
 
 // ==================== 发货接口 ====================
 
-const deliveryProvisionRequestSchema = z.object({
-  username: z.string().min(1),
-  expiresAt: z.string().min(1),
-  dailyLimitUsd: z.number().optional(),
-  limitConcurrentSessions: z.number().optional(),
-  dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
-  dailyResetTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-    .optional(),
-  regenerateKey: z.boolean().optional(),
-});
+const deliveryProvisionRequestSchema = z
+  .object({
+    username: z.string().min(1),
+    expiresAt: z.string().min(1).optional(),
+    durationDays: z.coerce.number().int().min(1).max(3650).optional(),
+    dailyLimitUsd: z.number().optional(),
+    limitTotalUsd: z.number().nullable().optional(),
+    limitConcurrentSessions: z.number().optional(),
+    dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
+    dailyResetTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+    regenerateKey: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.expiresAt && data.durationDays == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "必须提供 expiresAt 或 durationDays",
+        path: ["expiresAt"],
+      });
+    }
+
+    if (data.expiresAt && data.durationDays != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expiresAt 与 durationDays 不能同时传入",
+        path: ["durationDays"],
+      });
+    }
+  });
 
 const { route: provisionDeliveryRoute, handler: provisionDeliveryHandler } = createActionRoute(
   "delivery",
@@ -397,7 +417,8 @@ const { route: provisionDeliveryRoute, handler: provisionDeliveryHandler } = cre
       apiKey: z.string(),
       userId: z.number(),
       username: z.string(),
-      expiresAt: z.string(),
+      expiresAt: z.string().nullable(),
+      durationDays: z.number().nullable(),
       isNewUser: z.boolean(),
       isNewKey: z.boolean(),
     }),

@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { removeUser } from "@/actions/users";
@@ -24,7 +24,7 @@ export function DeleteUserConfirm({
   user,
   onSuccess,
 }: DeleteUserConfirmProps & { onSuccess?: () => void }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
 
   const handleConfirm = () => {
@@ -37,7 +37,9 @@ export function DeleteUserConfirm({
           return;
         }
         onSuccess?.();
-        router.refresh();
+        queryClient.invalidateQueries({ queryKey: ["users"] });
+        queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
+        queryClient.invalidateQueries({ queryKey: ["userTags"] });
       } catch (error) {
         console.error("删除用户失败:", error);
         toast.error("删除失败，请稍后重试");

@@ -145,6 +145,7 @@ export function UserManagementTable({
   );
   const parentRef = useRef<HTMLDivElement>(null);
   const prevAutoExpandRef = useRef(autoExpandOnFilter);
+  const initialAutoLoadDoneRef = useRef(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
@@ -260,10 +261,31 @@ export function UserManagementTable({
   const lastItemIndex = virtualItems[virtualItems.length - 1]?.index ?? -1;
 
   useEffect(() => {
+    initialAutoLoadDoneRef.current = false;
+  }, [scrollResetKey]);
+
+  useEffect(() => {
     if (!onLoadMore) return;
     if (!hasNextPage) return;
     if (isFetchingNextPage) return;
-    if (lastItemIndex >= users.length - 5) {
+    if (users.length === 0) return;
+
+    const scrollElement = parentRef.current;
+    if (!scrollElement) return;
+
+    const remainingScrollDistance =
+      scrollElement.scrollHeight - scrollElement.clientHeight - scrollElement.scrollTop;
+    const isNearBottom = remainingScrollDistance <= 200;
+
+    if (!initialAutoLoadDoneRef.current) {
+      initialAutoLoadDoneRef.current = true;
+      if (isNearBottom) {
+        onLoadMore();
+      }
+      return;
+    }
+
+    if (isNearBottom && lastItemIndex >= users.length - 5) {
       onLoadMore();
     }
   }, [lastItemIndex, users.length, hasNextPage, isFetchingNextPage, onLoadMore]);
@@ -373,10 +395,7 @@ export function UserManagementTable({
         return { ok: false };
       }
       toast.success(tUserMgmt("quickRenew.success"));
-      // 刷新服务端数据（成功后乐观更新状态会在useEffect中被props覆盖）
-      // 使 React Query 缓存失效，确保数据刷新
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      router.refresh();
       return { ok: true };
     } catch (error) {
       // 失败时回滚

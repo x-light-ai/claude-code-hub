@@ -2,7 +2,6 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Trash2, UserCog } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -52,7 +51,7 @@ export interface EditUserDialogProps {
   onSuccess?: () => void;
 }
 
-const EditUserSchema = UpdateUserSchema.extend({
+const EditUserSchema = UpdateUserSchema.safeExtend({
   name: z.string().min(1).max(64),
   providerGroup: z.string().max(200).nullable().optional(),
   allowedClients: z.array(z.string().max(64)).max(50).optional().default([]),
@@ -86,7 +85,6 @@ function buildDefaultValues(user: UserDisplay): EditUserValues {
 }
 
 function EditUserDialogInner({ onOpenChange, user, onSuccess }: EditUserDialogProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const t = useTranslations("dashboard.userManagement");
   const tCommon = useTranslations("common");
@@ -138,7 +136,6 @@ function EditUserDialogInner({ onOpenChange, user, onSuccess }: EditUserDialogPr
           queryClient.invalidateQueries({ queryKey: ["users"] });
           queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
           queryClient.invalidateQueries({ queryKey: ["userTags"] });
-          router.refresh();
         } catch (error) {
           console.error("[EditUserDialog] submit failed", error);
           toast.error(t("editDialog.saveFailed"));
@@ -191,7 +188,6 @@ function EditUserDialogInner({ onOpenChange, user, onSuccess }: EditUserDialogPr
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
       queryClient.invalidateQueries({ queryKey: ["userTags"] });
-      router.refresh();
     } catch (error) {
       console.error("[EditUserDialog] disable user failed", error);
       toast.error(t("editDialog.operationFailed"));
@@ -210,7 +206,6 @@ function EditUserDialogInner({ onOpenChange, user, onSuccess }: EditUserDialogPr
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
       queryClient.invalidateQueries({ queryKey: ["userTags"] });
-      router.refresh();
     } catch (error) {
       console.error("[EditUserDialog] enable user failed", error);
       toast.error(t("editDialog.operationFailed"));
@@ -228,7 +223,6 @@ function EditUserDialogInner({ onOpenChange, user, onSuccess }: EditUserDialogPr
     queryClient.invalidateQueries({ queryKey: ["users"] });
     queryClient.invalidateQueries({ queryKey: ["userKeyGroups"] });
     queryClient.invalidateQueries({ queryKey: ["userTags"] });
-    router.refresh();
   };
 
   const handleResetAllStatistics = async () => {

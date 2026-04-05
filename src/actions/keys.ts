@@ -68,6 +68,10 @@ function resolveEditedKeyExpiry(options: {
   const currentExpiresAt = currentKey.expiresAt ?? null;
   const isCurrentlyActive = currentExpiresAt instanceof Date && currentExpiresAt.getTime() > Date.now();
 
+  if (currentKey.durationDays != null && isCurrentlyActive) {
+    throw new Error("RELATIVE_EXPIRY_ADJUST_REQUIRES_SPECIAL_ACTION");
+  }
+
   return {
     expiresAt: isCurrentlyActive ? addDays(currentExpiresAt, durationDays) : null,
     durationDays,
@@ -1221,6 +1225,73 @@ export async function batchUpdateKeys(
  * 与 editKey 不同，此函数仅更新 expires_at 和 is_enabled 字段，
  * 不会覆盖其他密钥设置（如 canLoginWebUi, dailyResetMode, limitConcurrentSessions 等）。
  */
+export async function adjustRelativeKeyExpiry(
+  keyId: number,
+  data: { mode: "extend" | "reduce"; days: number }
+): Promise<ActionResult> {
+  try {
+    const tError = await getTranslations("errors");
+
+    const session = await getSession();
+    if (!session) {
+      return {
+        ok: false,
+        error: tError("UNAUTHORIZED"),
+        errorCode: ERROR_CODES.UNAUTHORIZED,
+      };
+    }
+
+    const key = await findKeyById(keyId);
+    if (!key) {
+      return {
+        ok: false,
+        error: tError("KEY_NOT_FOUND"),
+        errorCode: ERROR_CODES.NOT_FOUND,
+      };
+    }
+
+    if (session.user.role !== "admin" && session.user.id !== key.userId) {
+      return {
+        ok: false,
+        error: tError("PERMISSION_DENIED"),
+        errorCode: ERROR_CODES.PERMISSION_DENIED,
+      };
+    }
+
+    if (!Number.isInteger(data.days) || data.days < 1) {
+      return {
+        ok: false,
+        error: tError("INVALID_FORMAT"),
+        errorCode: ERROR_CODES.INVALID_FORMAT,
+      };
+    }
+
+    if (key.durationDays == null || !(key.expiresAt instanceof Date)) {
+      return {
+        ok: false,
+        error: tError("OPERATION_FAILED"),
+        errorCode: ERROR_CODES.OPERATION_FAILED,
+      };
+    }
+
+    const deltaDays = data.mode === "extend" ? data.days : -data.days;
+    const nextExpiresAt = addDays(key.expiresAt, deltaDays);
+
+    await updateKey(keyId, {
+      expires_at: nextExpiresAt,
+    });
+
+    revalidatePath("/dashboard/users");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (error) {
+    logger.error("调整相对有效期失败:", error);
+    const tError = await getTranslations("errors");
+    const message = error instanceof Error ? error.message : tError("UPDATE_KEY_FAILED");
+    return { ok: false, error: message, errorCode: ERROR_CODES.UPDATE_FAILED };
+  }
+}
+
 export async function renewKeyExpiresAt(
   keyId: number,
   data: { expiresAt: string; enableKey?: boolean }
