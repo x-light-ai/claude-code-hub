@@ -55,9 +55,7 @@ function parseDate(dateStr: string): Date | undefined {
     return new Date(year, month - 1, day);
   }
 
-  const matched = dateStr.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
-  );
+  const matched = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!matched) return undefined;
 
   const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr] = matched;

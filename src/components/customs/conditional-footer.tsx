@@ -8,9 +8,7 @@ export async function ConditionalFooter() {
   // 隐藏 footer 的路径
   const hideFooterPaths = ["/login", "/my-usage"];
 
-  const shouldHideFooter = hideFooterPaths.some((path) =>
-    pathname.includes(path)
-  );
+  const shouldHideFooter = hideFooterPaths.some((path) => pathname.includes(path));
 
   if (shouldHideFooter) {
     return null;

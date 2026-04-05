@@ -46,7 +46,8 @@ function resolveEditedKeyExpiry(options: {
   hasDurationDaysField: boolean;
   durationDays?: number | null;
 }): { expiresAt?: Date | null; durationDays?: number | null } {
-  const { currentKey, hasExpiresAtField, parsedExpiresAt, hasDurationDaysField, durationDays } = options;
+  const { currentKey, hasExpiresAtField, parsedExpiresAt, hasDurationDaysField, durationDays } =
+    options;
 
   if (hasExpiresAtField) {
     return {
@@ -66,7 +67,8 @@ function resolveEditedKeyExpiry(options: {
   }
 
   const currentExpiresAt = currentKey.expiresAt ?? null;
-  const isCurrentlyActive = currentExpiresAt instanceof Date && currentExpiresAt.getTime() > Date.now();
+  const isCurrentlyActive =
+    currentExpiresAt instanceof Date && currentExpiresAt.getTime() > Date.now();
 
   if (currentKey.durationDays != null && isCurrentlyActive) {
     throw new Error("RELATIVE_EXPIRY_ADJUST_REQUIRES_SPECIAL_ACTION");
@@ -591,7 +593,9 @@ export async function editKey(
 
     await updateKey(keyId, {
       name: validatedData.name,
-      ...(Object.hasOwn(expiryUpdate, "expiresAt") ? { expires_at: expiryUpdate.expiresAt ?? null } : {}),
+      ...(Object.hasOwn(expiryUpdate, "expiresAt")
+        ? { expires_at: expiryUpdate.expiresAt ?? null }
+        : {}),
       ...(Object.hasOwn(expiryUpdate, "durationDays")
         ? { duration_days: expiryUpdate.durationDays ?? null }
         : {}),

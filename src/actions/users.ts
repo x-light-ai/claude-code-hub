@@ -216,10 +216,12 @@ export interface GetUsersUsageBatchResult {
   usageByKeyId: Record<number, KeyUsageData>;
 }
 
-function buildDefaultUserLimitUsage(user: Pick<
-  User,
-  "limit5hUsd" | "dailyQuota" | "limitWeeklyUsd" | "limitMonthlyUsd" | "limitTotalUsd"
->): UserLimitUsageDisplay {
+function buildDefaultUserLimitUsage(
+  user: Pick<
+    User,
+    "limit5hUsd" | "dailyQuota" | "limitWeeklyUsd" | "limitMonthlyUsd" | "limitTotalUsd"
+  >
+): UserLimitUsageDisplay {
   return {
     limit5h: { usage: 0, limit: user.limit5hUsd ?? null },
     limitDaily: { usage: 0, limit: user.dailyQuota ?? null },

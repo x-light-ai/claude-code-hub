@@ -90,7 +90,11 @@ async function getActivatedRelativeExpiry(
     return null;
   }
 
-  const expiresAt = await activateRelativeExpiryIfNeeded(key.id, requestStartTime, key.durationDays);
+  const expiresAt = await activateRelativeExpiryIfNeeded(
+    key.id,
+    requestStartTime,
+    key.durationDays
+  );
   if (!expiresAt || expiresAt.getTime() <= Date.now()) {
     return null;
   }
@@ -381,7 +385,9 @@ export async function updateKey(id: number, keyData: UpdateKeyData): Promise<Key
   }
 
   const durationDays =
-    keyData.duration_days !== undefined ? keyData.duration_days : await getKeyRelativeExpiryDurationDays(id);
+    keyData.duration_days !== undefined
+      ? keyData.duration_days
+      : await getKeyRelativeExpiryDurationDays(id);
 
   const updated = toKey({
     ...key,

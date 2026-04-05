@@ -23,7 +23,12 @@ const ProvisionSchema = z
       .max(3650, "相对有效期不能超过3650天")
       .optional(),
     dailyLimitUsd: z.number().optional(),
-    limitTotalUsd: z.number().min(0, "总消费上限不能为负数").max(10000000, "总消费上限不能超过10000000美元").nullable().optional(),
+    limitTotalUsd: z
+      .number()
+      .min(0, "总消费上限不能为负数")
+      .max(10000000, "总消费上限不能超过10000000美元")
+      .nullable()
+      .optional(),
     limitConcurrentSessions: z.number().optional(),
     dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
     dailyResetTime: z
@@ -182,5 +187,3 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
     return { ok: false, error: message };
   }
 }
-
-

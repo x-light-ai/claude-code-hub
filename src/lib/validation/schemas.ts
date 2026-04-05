@@ -93,143 +93,145 @@ const OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA =
 /**
  * 用户创建数据验证schema
  */
-export const CreateUserSchemaBase = z.object({
-  name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符"),
-  note: z.string().max(200, "备注不能超过200个字符").optional().default(""),
-  providerGroup: z
-    .string()
-    .max(200, "供应商分组不能超过200个字符")
-    .nullable()
-    .optional()
-    .default(""),
-  tags: z
-    .array(z.string().max(32, "标签长度不能超过32个字符"))
-    .max(20, "标签数量不能超过20个")
-    .optional()
-    .default([]),
-  rpm: z.coerce
-    .number()
-    .int("RPM必须是整数")
-    .min(USER_LIMITS.RPM.MIN, `RPM不能低于${USER_LIMITS.RPM.MIN}`)
-    .max(USER_LIMITS.RPM.MAX, `RPM不能超过${USER_LIMITS.RPM.MAX}`)
-    .nullable()
-    .optional(),
-  dailyQuota: z.coerce
-    .number()
-    .min(USER_LIMITS.DAILY_QUOTA.MIN, `每日额度不能低于${USER_LIMITS.DAILY_QUOTA.MIN}美元`)
-    .max(USER_LIMITS.DAILY_QUOTA.MAX, `每日额度不能超过${USER_LIMITS.DAILY_QUOTA.MAX}美元`)
-    .nullable()
-    .optional(),
-  limit5hUsd: z.coerce
-    .number()
-    .min(0, "5小时消费上限不能为负数")
-    .max(10000, "5小时消费上限不能超过10000美元")
-    .nullable()
-    .optional(),
-  limitWeeklyUsd: z.coerce
-    .number()
-    .min(0, "周消费上限不能为负数")
-    .max(50000, "周消费上限不能超过50000美元")
-    .nullable()
-    .optional(),
-  limitMonthlyUsd: z.coerce
-    .number()
-    .min(0, "月消费上限不能为负数")
-    .max(200000, "月消费上限不能超过200000美元")
-    .nullable()
-    .optional(),
-  limitTotalUsd: z.coerce
-    .number()
-    .min(0, "总消费上限不能为负数")
-    .max(10000000, "总消费上限不能超过10000000美元")
-    .nullable()
-    .optional(),
-  limitConcurrentSessions: z.coerce
-    .number()
-    .int("并发Session上限必须是整数")
-    .min(0, "并发Session上限不能为负数")
-    .max(1000, "并发Session上限不能超过1000")
-    .nullable()
-    .optional(),
-  // User status and expiry management
-  isEnabled: z.boolean().optional().default(true),
-  expiresAt: z.preprocess(
-    (val) => {
-      // null/undefined/空字符串 -> 视为未设置
-      if (val === null || val === undefined || val === "") return undefined;
-
-      // 已经是 Date 对象
-      if (val instanceof Date) {
-        // 验证是否为有效日期，无效则返回原值让后续报错
-        if (Number.isNaN(val.getTime())) return val;
-        return val;
-      }
-
-      // 字符串日期 -> 转换为 Date 对象
-      if (typeof val === "string") {
-        const date = new Date(val);
-        // 验证是否为有效日期，无效则返回原值让后续报错
-        if (Number.isNaN(date.getTime())) return val;
-        return date;
-      }
-
-      // 其他类型返回原值，让 z.date() 报错
-      return val;
-    },
-    z
-      .date()
+export const CreateUserSchemaBase = z
+  .object({
+    name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符"),
+    note: z.string().max(200, "备注不能超过200个字符").optional().default(""),
+    providerGroup: z
+      .string()
+      .max(200, "供应商分组不能超过200个字符")
+      .nullable()
       .optional()
-      .superRefine((date, ctx) => {
-        if (!date) {
-          return; // 允许空值
+      .default(""),
+    tags: z
+      .array(z.string().max(32, "标签长度不能超过32个字符"))
+      .max(20, "标签数量不能超过20个")
+      .optional()
+      .default([]),
+    rpm: z.coerce
+      .number()
+      .int("RPM必须是整数")
+      .min(USER_LIMITS.RPM.MIN, `RPM不能低于${USER_LIMITS.RPM.MIN}`)
+      .max(USER_LIMITS.RPM.MAX, `RPM不能超过${USER_LIMITS.RPM.MAX}`)
+      .nullable()
+      .optional(),
+    dailyQuota: z.coerce
+      .number()
+      .min(USER_LIMITS.DAILY_QUOTA.MIN, `每日额度不能低于${USER_LIMITS.DAILY_QUOTA.MIN}美元`)
+      .max(USER_LIMITS.DAILY_QUOTA.MAX, `每日额度不能超过${USER_LIMITS.DAILY_QUOTA.MAX}美元`)
+      .nullable()
+      .optional(),
+    limit5hUsd: z.coerce
+      .number()
+      .min(0, "5小时消费上限不能为负数")
+      .max(10000, "5小时消费上限不能超过10000美元")
+      .nullable()
+      .optional(),
+    limitWeeklyUsd: z.coerce
+      .number()
+      .min(0, "周消费上限不能为负数")
+      .max(50000, "周消费上限不能超过50000美元")
+      .nullable()
+      .optional(),
+    limitMonthlyUsd: z.coerce
+      .number()
+      .min(0, "月消费上限不能为负数")
+      .max(200000, "月消费上限不能超过200000美元")
+      .nullable()
+      .optional(),
+    limitTotalUsd: z.coerce
+      .number()
+      .min(0, "总消费上限不能为负数")
+      .max(10000000, "总消费上限不能超过10000000美元")
+      .nullable()
+      .optional(),
+    limitConcurrentSessions: z.coerce
+      .number()
+      .int("并发Session上限必须是整数")
+      .min(0, "并发Session上限不能为负数")
+      .max(1000, "并发Session上限不能超过1000")
+      .nullable()
+      .optional(),
+    // User status and expiry management
+    isEnabled: z.boolean().optional().default(true),
+    expiresAt: z.preprocess(
+      (val) => {
+        // null/undefined/空字符串 -> 视为未设置
+        if (val === null || val === undefined || val === "") return undefined;
+
+        // 已经是 Date 对象
+        if (val instanceof Date) {
+          // 验证是否为有效日期，无效则返回原值让后续报错
+          if (Number.isNaN(val.getTime())) return val;
+          return val;
         }
 
-        const now = new Date();
-
-        // 检查是否为将来时间
-        if (date <= now) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "过期时间必须是将来时间",
-          });
+        // 字符串日期 -> 转换为 Date 对象
+        if (typeof val === "string") {
+          const date = new Date(val);
+          // 验证是否为有效日期，无效则返回原值让后续报错
+          if (Number.isNaN(date.getTime())) return val;
+          return date;
         }
 
-        // 限制最大续期时长(10年)
-        const maxExpiry = new Date(now.getTime());
-        maxExpiry.setFullYear(maxExpiry.getFullYear() + 10);
-        if (date > maxExpiry) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "过期时间不能超过10年",
-          });
-        }
-      })
-  ),
-  // Daily quota reset mode
-  dailyResetMode: z.enum(["fixed", "rolling"]).optional().default("rolling"),
-  dailyResetTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
-    .optional(),
-  // Allowed clients (CLI/IDE restrictions)
-  allowedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA,
-  // Blocked clients (CLI/IDE restrictions)
-  blockedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA,
-  // Allowed models (AI model restrictions)
-  allowedModels: z
-    .array(z.string().max(64, "模型名称长度不能超过64个字符"))
-    .max(50, "模型数量不能超过50个")
-    .optional()
-    .default([]),
-}).superRefine((data, ctx) => {
-  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "固定时间重置模式必须填写重置时间",
-      path: ["dailyResetTime"],
-    });
-  }
-});
+        // 其他类型返回原值，让 z.date() 报错
+        return val;
+      },
+      z
+        .date()
+        .optional()
+        .superRefine((date, ctx) => {
+          if (!date) {
+            return; // 允许空值
+          }
+
+          const now = new Date();
+
+          // 检查是否为将来时间
+          if (date <= now) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "过期时间必须是将来时间",
+            });
+          }
+
+          // 限制最大续期时长(10年)
+          const maxExpiry = new Date(now.getTime());
+          maxExpiry.setFullYear(maxExpiry.getFullYear() + 10);
+          if (date > maxExpiry) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "过期时间不能超过10年",
+            });
+          }
+        })
+    ),
+    // Daily quota reset mode
+    dailyResetMode: z.enum(["fixed", "rolling"]).optional().default("rolling"),
+    dailyResetTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
+      .optional(),
+    // Allowed clients (CLI/IDE restrictions)
+    allowedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA,
+    // Blocked clients (CLI/IDE restrictions)
+    blockedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_WITH_DEFAULT_SCHEMA,
+    // Allowed models (AI model restrictions)
+    allowedModels: z
+      .array(z.string().max(64, "模型名称长度不能超过64个字符"))
+      .max(50, "模型数量不能超过50个")
+      .optional()
+      .default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "固定时间重置模式必须填写重置时间",
+        path: ["dailyResetTime"],
+      });
+    }
+  });
 
 export const CreateUserSchema = CreateUserSchemaBase.superRefine((data, ctx) => {
   if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
@@ -244,132 +246,134 @@ export const CreateUserSchema = CreateUserSchemaBase.superRefine((data, ctx) => 
 /**
  * 用户更新数据验证schema
  */
-export const UpdateUserSchemaBase = z.object({
-  name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符").optional(),
-  note: z.string().max(200, "备注不能超过200个字符").optional(),
-  providerGroup: z.string().max(200, "供应商分组不能超过200个字符").nullable().optional(),
-  tags: z
-    .array(z.string().max(32, "标签长度不能超过32个字符"))
-    .max(20, "标签数量不能超过20个")
-    .optional(),
-  rpm: z.coerce
-    .number()
-    .int("RPM必须是整数")
-    .min(USER_LIMITS.RPM.MIN, `RPM不能低于${USER_LIMITS.RPM.MIN}`)
-    .max(USER_LIMITS.RPM.MAX, `RPM不能超过${USER_LIMITS.RPM.MAX}`)
-    .optional(),
-  dailyQuota: z.coerce
-    .number()
-    .min(USER_LIMITS.DAILY_QUOTA.MIN, `每日额度不能低于${USER_LIMITS.DAILY_QUOTA.MIN}美元`)
-    .max(USER_LIMITS.DAILY_QUOTA.MAX, `每日额度不能超过${USER_LIMITS.DAILY_QUOTA.MAX}美元`)
-    .nullable()
-    .optional(),
-  limit5hUsd: z.coerce
-    .number()
-    .min(0, "5小时消费上限不能为负数")
-    .max(10000, "5小时消费上限不能超过10000美元")
-    .nullable()
-    .optional(),
-  limitWeeklyUsd: z.coerce
-    .number()
-    .min(0, "周消费上限不能为负数")
-    .max(50000, "周消费上限不能超过50000美元")
-    .nullable()
-    .optional(),
-  limitMonthlyUsd: z.coerce
-    .number()
-    .min(0, "月消费上限不能为负数")
-    .max(200000, "月消费上限不能超过200000美元")
-    .nullable()
-    .optional(),
-  limitTotalUsd: z.coerce
-    .number()
-    .min(0, "总消费上限不能为负数")
-    .max(10000000, "总消费上限不能超过10000000美元")
-    .nullable()
-    .optional(),
-  limitConcurrentSessions: z.coerce
-    .number()
-    .int("并发Session上限必须是整数")
-    .min(0, "并发Session上限不能为负数")
-    .max(1000, "并发Session上限不能超过1000")
-    .nullable()
-    .optional(),
-  // User status and expiry management
-  isEnabled: z.boolean().optional(),
-  expiresAt: z.preprocess(
-    (val) => {
-      // 更新语义：
-      // - undefined：不更新该字段
-      // - null/空字符串：显式清除过期时间（永不过期）
-      if (val === undefined) return undefined;
-      if (val === null || val === "") return null;
-
-      // 已经是 Date 对象
-      if (val instanceof Date) {
-        // 验证是否为有效日期，无效则返回原值让后续报错
-        if (Number.isNaN(val.getTime())) return val;
-        return val;
-      }
-
-      // 字符串日期 -> 转换为 Date 对象
-      if (typeof val === "string") {
-        const date = new Date(val);
-        // 验证是否为有效日期，无效则返回原值让后续报错
-        if (Number.isNaN(date.getTime())) return val;
-        return date;
-      }
-
-      // 其他类型返回原值，让 z.date() 报错
-      return val;
-    },
-    z
-      .date()
+export const UpdateUserSchemaBase = z
+  .object({
+    name: z.string().min(1, "用户名不能为空").max(64, "用户名不能超过64个字符").optional(),
+    note: z.string().max(200, "备注不能超过200个字符").optional(),
+    providerGroup: z.string().max(200, "供应商分组不能超过200个字符").nullable().optional(),
+    tags: z
+      .array(z.string().max(32, "标签长度不能超过32个字符"))
+      .max(20, "标签数量不能超过20个")
+      .optional(),
+    rpm: z.coerce
+      .number()
+      .int("RPM必须是整数")
+      .min(USER_LIMITS.RPM.MIN, `RPM不能低于${USER_LIMITS.RPM.MIN}`)
+      .max(USER_LIMITS.RPM.MAX, `RPM不能超过${USER_LIMITS.RPM.MAX}`)
+      .optional(),
+    dailyQuota: z.coerce
+      .number()
+      .min(USER_LIMITS.DAILY_QUOTA.MIN, `每日额度不能低于${USER_LIMITS.DAILY_QUOTA.MIN}美元`)
+      .max(USER_LIMITS.DAILY_QUOTA.MAX, `每日额度不能超过${USER_LIMITS.DAILY_QUOTA.MAX}美元`)
       .nullable()
-      .optional()
-      .superRefine((date, ctx) => {
-        if (!date) {
-          return; // 允许空值
+      .optional(),
+    limit5hUsd: z.coerce
+      .number()
+      .min(0, "5小时消费上限不能为负数")
+      .max(10000, "5小时消费上限不能超过10000美元")
+      .nullable()
+      .optional(),
+    limitWeeklyUsd: z.coerce
+      .number()
+      .min(0, "周消费上限不能为负数")
+      .max(50000, "周消费上限不能超过50000美元")
+      .nullable()
+      .optional(),
+    limitMonthlyUsd: z.coerce
+      .number()
+      .min(0, "月消费上限不能为负数")
+      .max(200000, "月消费上限不能超过200000美元")
+      .nullable()
+      .optional(),
+    limitTotalUsd: z.coerce
+      .number()
+      .min(0, "总消费上限不能为负数")
+      .max(10000000, "总消费上限不能超过10000000美元")
+      .nullable()
+      .optional(),
+    limitConcurrentSessions: z.coerce
+      .number()
+      .int("并发Session上限必须是整数")
+      .min(0, "并发Session上限不能为负数")
+      .max(1000, "并发Session上限不能超过1000")
+      .nullable()
+      .optional(),
+    // User status and expiry management
+    isEnabled: z.boolean().optional(),
+    expiresAt: z.preprocess(
+      (val) => {
+        // 更新语义：
+        // - undefined：不更新该字段
+        // - null/空字符串：显式清除过期时间（永不过期）
+        if (val === undefined) return undefined;
+        if (val === null || val === "") return null;
+
+        // 已经是 Date 对象
+        if (val instanceof Date) {
+          // 验证是否为有效日期，无效则返回原值让后续报错
+          if (Number.isNaN(val.getTime())) return val;
+          return val;
         }
 
-        // 更新时不限制过去时间（允许立即让用户过期）
-
-        // 限制最大续期时长(10年)
-        const now = new Date();
-        const maxExpiry = new Date(now.getTime());
-        maxExpiry.setFullYear(maxExpiry.getFullYear() + 10);
-        if (date > maxExpiry) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "过期时间不能超过10年",
-          });
+        // 字符串日期 -> 转换为 Date 对象
+        if (typeof val === "string") {
+          const date = new Date(val);
+          // 验证是否为有效日期，无效则返回原值让后续报错
+          if (Number.isNaN(date.getTime())) return val;
+          return date;
         }
-      })
-  ),
-  // Daily quota reset mode
-  dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
-  dailyResetTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
-    .optional(),
-  // Allowed clients (CLI/IDE restrictions)
-  allowedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_SCHEMA,
-  // Blocked clients (CLI/IDE restrictions)
-  blockedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_SCHEMA,
-  // Allowed models (AI model restrictions)
-  allowedModels: z
-    .array(z.string().max(64, "模型名称长度不能超过64个字符"))
-    .max(50, "模型数量不能超过50个")
-    .optional(),
-}).superRefine((data, ctx) => {
-  if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "固定时间重置模式必须填写重置时间",
-      path: ["dailyResetTime"],
-    });
-  }
-});
+
+        // 其他类型返回原值，让 z.date() 报错
+        return val;
+      },
+      z
+        .date()
+        .nullable()
+        .optional()
+        .superRefine((date, ctx) => {
+          if (!date) {
+            return; // 允许空值
+          }
+
+          // 更新时不限制过去时间（允许立即让用户过期）
+
+          // 限制最大续期时长(10年)
+          const now = new Date();
+          const maxExpiry = new Date(now.getTime());
+          maxExpiry.setFullYear(maxExpiry.getFullYear() + 10);
+          if (date > maxExpiry) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "过期时间不能超过10年",
+            });
+          }
+        })
+    ),
+    // Daily quota reset mode
+    dailyResetMode: z.enum(["fixed", "rolling"]).optional(),
+    dailyResetTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "重置时间格式必须为 HH:mm")
+      .optional(),
+    // Allowed clients (CLI/IDE restrictions)
+    allowedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_SCHEMA,
+    // Blocked clients (CLI/IDE restrictions)
+    blockedClients: OPTIONAL_CLIENT_PATTERN_ARRAY_SCHEMA,
+    // Allowed models (AI model restrictions)
+    allowedModels: z
+      .array(z.string().max(64, "模型名称长度不能超过64个字符"))
+      .max(50, "模型数量不能超过50个")
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "固定时间重置模式必须填写重置时间",
+        path: ["dailyResetTime"],
+      });
+    }
+  });
 
 export const UpdateUserSchema = UpdateUserSchemaBase.superRefine((data, ctx) => {
   if (data.dailyResetMode === "fixed" && !data.dailyResetTime) {

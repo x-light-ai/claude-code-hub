@@ -163,7 +163,9 @@ export function UsageLogsTable({
             <div className="flex items-center h-9 text-[11px] font-medium text-muted-foreground/80 tracking-wide">
               <div className="w-[20%] min-w-0 px-3">{t("table.time")}</div>
               <div className="w-[27%] min-w-0 px-2">{t("table.model")}</div>
-              <div className="w-[11%] min-w-0 whitespace-nowrap px-2 text-right">{t("table.tokens")}</div>
+              <div className="w-[11%] min-w-0 whitespace-nowrap px-2 text-right">
+                {t("table.tokens")}
+              </div>
               <div className="w-[12%] min-w-0 px-2 text-right">{t("table.cacheWrite")}</div>
               <div className="w-[10%] min-w-0 px-2 text-right">{t("table.cacheRead")}</div>
               <div className="w-[10%] min-w-0 px-2 text-right">{t("table.cost")}</div>
@@ -272,7 +274,10 @@ export function UsageLogsTable({
                               {log.cacheCreationInputTokens &&
                               log.cacheCreationInputTokens > 0 &&
                               log.cacheTtlApplied ? (
-                                <Badge variant="outline" className="shrink-0 text-[10px] leading-tight px-1">
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 text-[10px] leading-tight px-1"
+                                >
                                   {log.cacheTtlApplied}
                                 </Badge>
                               ) : null}
@@ -302,7 +307,8 @@ export function UsageLogsTable({
                         }
                         className={cn(
                           "max-w-full truncate",
-                          log.statusCode === 200 && "border-green-500 text-green-600 dark:text-green-400"
+                          log.statusCode === 200 &&
+                            "border-green-500 text-green-600 dark:text-green-400"
                         )}
                       >
                         {log.statusCode ?? "-"}

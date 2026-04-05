@@ -9,10 +9,7 @@ const SESSION_KEY_PREFIX = "cch:session:";
 const MIN_TTL_SECONDS = 1;
 const REDIS_READY_WAIT_TIMEOUT_MS = 3_000;
 
-type RedisSessionClient = Pick<
-  Redis,
-  "status" | "setex" | "get" | "del" | "once" | "off"
->;
+type RedisSessionClient = Pick<Redis, "status" | "setex" | "get" | "del" | "once" | "off">;
 
 export interface RedisSessionStoreOptions {
   defaultTtlSeconds?: number;
@@ -136,7 +133,10 @@ export class RedisSessionStore implements SessionStore {
       redis.once("ready", onReady);
       redis.once("error", onError);
 
-      timeoutId = setTimeout(() => finish(redis.status === "ready" ? redis : null), REDIS_READY_WAIT_TIMEOUT_MS);
+      timeoutId = setTimeout(
+        () => finish(redis.status === "ready" ? redis : null),
+        REDIS_READY_WAIT_TIMEOUT_MS
+      );
     });
   }
 
