@@ -1,10 +1,10 @@
 "use client";
 
-import { AlertTriangle, Eye, EyeOff, Key, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Key, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,6 @@ export function LoginFormClient() {
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<LoginStatus>("idle");
   const [error, setError] = useState("");
-  const [showHttpWarning, setShowHttpWarning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -57,12 +56,6 @@ export function LoginFormClient() {
     }
   }, [status]);
 
-  useEffect(() => {
-    const isHttp = window.location.protocol === "http:";
-    const isLocalhost =
-      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    setShowHttpWarning(isHttp && !isLocalhost);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,22 +123,6 @@ export function LoginFormClient() {
           </div>
         </CardHeader>
         <CardContent className="px-8 pb-8">
-          {showHttpWarning ? (
-            <Alert variant="destructive" className="mb-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>{t("security.cookieWarningTitle")}</AlertTitle>
-              <AlertDescription className="mt-2 space-y-2 text-sm">
-                <p>{t("security.cookieWarningDescription")}</p>
-                <div className="mt-3">
-                  <p className="font-medium">{t("security.solutionTitle")}</p>
-                  <ol className="ml-4 mt-1 list-decimal space-y-1">
-                    <li>{t("security.useHttps")}</li>
-                    <li>{t("security.disableSecureCookies")}</li>
-                  </ol>
-                </div>
-              </AlertDescription>
-            </Alert>
-          ) : null}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">
               <div className="space-y-2">

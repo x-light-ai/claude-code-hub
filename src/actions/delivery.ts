@@ -7,7 +7,7 @@ import { parseDateInputAsTimezone } from "@/lib/utils/date-input";
 import { resolveSystemTimezone } from "@/lib/utils/timezone";
 import { formatZodError } from "@/lib/utils/zod-i18n";
 import { createKey, deleteKey, findKeyList, updateKey } from "@/repository/key";
-import { createUser, findUserByName, updateUser } from "@/repository/user";
+import { createUser, findUserByName } from "@/repository/user";
 import type { ActionResult } from "./types";
 
 // CUSTOM: 发货系统专用接口
@@ -15,6 +15,7 @@ import type { ActionResult } from "./types";
 const ProvisionSchema = z
   .object({
     username: z.string().min(1, "用户名不能为空"),
+    keyName: z.string().optional(),
     expiresAt: z.string().min(1, "过期时间不能为空").optional(),
     durationDays: z.coerce
       .number()
@@ -76,6 +77,7 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
 
     const {
       username,
+      keyName,
       expiresAt,
       durationDays,
       dailyLimitUsd,
@@ -86,6 +88,7 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
       regenerateKey,
     } = validated.data;
     const effectiveDailyResetMode = dailyResetMode ?? "rolling";
+    const effectiveKeyName = keyName?.trim() || "api";
 
     const timezone = await resolveSystemTimezone();
     const expiresAtDate =
@@ -97,16 +100,9 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
     if (!user) {
       user = await createUser({
         name: username,
-        description: "发货系统自动创建",
-        limitConcurrentSessions,
-        expiresAt: expiresAtDate,
+        description: "",
       });
       isNewUser = true;
-    } else {
-      await updateUser(user.id, {
-        limitConcurrentSessions,
-        expiresAt: expiresAtDate,
-      });
     }
 
     let apiKey: string;
@@ -121,7 +117,7 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
       await createKey({
         user_id: user.id,
         key: apiKey,
-        name: "发货系统生成",
+        name: effectiveKeyName,
         is_enabled: true,
         expires_at: expiresAtDate ?? null,
         duration_days: durationDays ?? null,
@@ -151,7 +147,7 @@ export async function provision(data: ProvisionData): Promise<ActionResult<Provi
         await createKey({
           user_id: user.id,
           key: apiKey,
-          name: "发货系统生成",
+          name: effectiveKeyName,
           is_enabled: true,
           expires_at: expiresAtDate ?? null,
           duration_days: durationDays ?? null,

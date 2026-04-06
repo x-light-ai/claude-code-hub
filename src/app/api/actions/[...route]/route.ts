@@ -377,6 +377,7 @@ app.openapi(getUserLimitUsageRoute, getUserLimitUsageHandler);
 const deliveryProvisionRequestSchema = z
   .object({
     username: z.string().min(1),
+    keyName: z.string().optional(),
     expiresAt: z.string().min(1).optional(),
     durationDays: z.coerce.number().int().min(1).max(3650).optional(),
     dailyLimitUsd: z.number().optional(),
