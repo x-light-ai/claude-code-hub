@@ -129,7 +129,7 @@ describe("delivery action provision", () => {
     expect(resolveSystemTimezoneMock).toHaveBeenCalledTimes(1);
     expect(parseDateInputAsTimezoneMock).toHaveBeenCalledWith(
       "2026-12-31 23:59:59",
-      "Asia/Shanghai",
+      "Asia/Shanghai"
     );
     expect(createUserMock).toHaveBeenCalledWith({
       name: "alice",
@@ -250,7 +250,10 @@ describe("delivery action provision", () => {
   test("regenerates keys when requested", async () => {
     getSessionMock.mockResolvedValue({ user: { id: 1, role: "admin" } });
     findUserByNameMock.mockResolvedValue({ id: 77, name: "carol" });
-    findKeyListMock.mockResolvedValue([{ id: 1, key: "sk-old-1" }, { id: 2, key: "sk-old-2" }]);
+    findKeyListMock.mockResolvedValue([
+      { id: 1, key: "sk-old-1" },
+      { id: 2, key: "sk-old-2" },
+    ]);
 
     const { provision } = await import("@/actions/delivery");
     const result = await provision({

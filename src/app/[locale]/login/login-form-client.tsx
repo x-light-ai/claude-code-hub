@@ -147,11 +147,7 @@ export function LoginFormClient() {
                     aria-label={showPassword ? t("form.hidePassword") : t("form.showPassword")}
                     tabIndex={-1}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
@@ -178,7 +174,9 @@ export function LoginFormClient() {
                   t("actions.enterConsole")
                 )}
               </Button>
-              <p className="text-center text-xs text-muted-foreground">{t("security.privacyNote")}</p>
+              <p className="text-center text-xs text-muted-foreground">
+                {t("security.privacyNote")}
+              </p>
             </div>
           </form>
         </CardContent>
@@ -186,4 +184,3 @@ export function LoginFormClient() {
     </>
   );
 }
-

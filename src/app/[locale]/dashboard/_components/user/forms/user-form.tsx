@@ -365,7 +365,9 @@ export function UserForm({ user, onSuccess, currentUser }: UserFormProps) {
               <Label htmlFor="daily-reset-mode">{tForm("dailyResetMode.label")}</Label>
               <Select
                 value={form.values.dailyResetMode}
-                onValueChange={(value: "fixed" | "rolling") => form.setValue("dailyResetMode", value)}
+                onValueChange={(value: "fixed" | "rolling") =>
+                  form.setValue("dailyResetMode", value)
+                }
                 disabled={isPending}
               >
                 <SelectTrigger id="daily-reset-mode">

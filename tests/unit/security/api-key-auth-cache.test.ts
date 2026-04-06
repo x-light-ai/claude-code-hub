@@ -195,7 +195,12 @@ describe("API Key 鉴权缓存：VacuumFilter -> Redis -> DB", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
 
-    const cachedKey = buildKey({ key: "sk-relative", userId: 10, durationDays: 7, expiresAt: null });
+    const cachedKey = buildKey({
+      key: "sk-relative",
+      userId: 10,
+      durationDays: 7,
+      expiresAt: null,
+    });
     const cachedUser = buildUser({ id: 10 });
     const activatedExpiresAt = new Date("2026-01-08T00:00:00.000Z");
     getCachedActiveKey.mockResolvedValueOnce(cachedKey);
@@ -227,7 +232,12 @@ describe("API Key 鉴权缓存：VacuumFilter -> Redis -> DB", () => {
   });
 
   test("validateApiKeyAndGetUser：未激活的相对有效期 key 缺少请求开始时间时应返回 null", async () => {
-    const cachedKey = buildKey({ key: "sk-relative-no-start", userId: 10, durationDays: 7, expiresAt: null });
+    const cachedKey = buildKey({
+      key: "sk-relative-no-start",
+      userId: 10,
+      durationDays: 7,
+      expiresAt: null,
+    });
     getCachedActiveKey.mockResolvedValueOnce(cachedKey);
 
     const { validateApiKeyAndGetUser } = await import("@/repository/key");

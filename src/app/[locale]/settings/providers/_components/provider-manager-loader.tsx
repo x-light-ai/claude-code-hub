@@ -84,7 +84,8 @@ function ProviderManagerLoaderContent({
     });
 
   const loading = isProvidersLoading;
-  const refreshing = !loading && (isProvidersFetching || (shouldLoadSecondaryData && isHealthFetching));
+  const refreshing =
+    !loading && (isProvidersFetching || (shouldLoadSecondaryData && isHealthFetching));
 
   return (
     <ProviderManager

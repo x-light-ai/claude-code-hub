@@ -171,7 +171,9 @@ async function resolveUsageDocOrigin() {
     return "";
   }
 
-  const protocol = forwardedProto || (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  const protocol =
+    forwardedProto ||
+    (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
   return `${protocol}://${host}`;
 }
 
@@ -1811,10 +1813,7 @@ curl -I ${resolvedOrigin}`}
  * 由服务端渲染静态文档内容，客户端仅负责目录交互
  */
 export default async function UsageDocPage() {
-  const [t, serviceOrigin] = await Promise.all([
-    getTranslations("usage"),
-    resolveUsageDocOrigin(),
-  ]);
+  const [t, serviceOrigin] = await Promise.all([getTranslations("usage"), resolveUsageDocOrigin()]);
   const tocItems = buildUsageDocToc(t);
 
   return (
